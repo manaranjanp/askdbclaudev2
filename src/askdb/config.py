@@ -63,8 +63,8 @@ class Limits(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_rows: int = Field(default=500, gt=0)
-    # None until it is measured during build (SPEC §22 item 3).
-    explain_token_budget: int | None = Field(default=None, gt=0)
+    # Provisional until measured from real row sizes in slice 7 (SPEC §22 item 3).
+    explain_token_budget: int = Field(default=4000, gt=0)
     query_timeout_seconds: int = Field(default=60, gt=0)
     audit_retention_days: int = Field(default=30, gt=0)
 

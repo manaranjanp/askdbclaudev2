@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { Chat } from "./Chat";
 import { Login, User } from "./Login";
-import { RawSqlBox } from "./RawSqlBox";
 import { Sidebar } from "./Sidebar";
 
 // undefined = still checking the session; null = signed out.
@@ -37,7 +37,8 @@ export function App() {
         {database === null ? (
           <p>Choose a database to start.</p>
         ) : (
-          <RawSqlBox database={database} />
+          // Switching databases starts a new conversation (SPEC §5).
+          <Chat key={database} database={database} />
         )}
       </main>
     </div>

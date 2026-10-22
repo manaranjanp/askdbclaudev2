@@ -103,7 +103,7 @@ def test_settings_default_when_file_is_missing(tmp_path):
     assert settings.limits.display_rows == 500
     assert settings.limits.query_timeout_seconds == 60
     assert settings.limits.audit_retention_days == 30
-    assert settings.limits.explain_token_budget is None
+    assert settings.limits.explain_token_budget == 4000
 
 
 def test_settings_file_overrides_defaults(tmp_path):

@@ -10,6 +10,7 @@ dependencies = [
     "pydantic>=2.7",
     "argon2-cffi>=25.1.0",
     "sqlglot>=30.24.0",
+    "anthropic>=2.1.0",
 ]
 
 [dependency-groups]

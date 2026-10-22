@@ -20,6 +20,20 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    database_name TEXT NOT NULL,
+    question TEXT NOT NULL,
+    generated_sql TEXT,
+    assumptions TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    error TEXT,
+    row_count INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    result_rows TEXT NOT NULL
+);
 """
 
 
