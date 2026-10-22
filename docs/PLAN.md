@@ -30,3 +30,8 @@
   - Verification: Unit: a config dumps to canonical YAML and reloads unchanged; oversize text is refused. Integration: a database saved from the admin screen appears in the selector with no restart and answers questions; invalid saves return the error list and write no file; edit replaces the schema live; re-check and remove behave as SPEC §16.4 says; path traversal in the file or name is refused; broken files on disk still show their errors. Manual: add CloudMetrics in the browser, introduce and fix an error, edit, re-check, remove.
   - Note: this replaces the slice 8 status panel and `/api/admin/status`. Startup still loads files from disk (SPEC §16.3).
   - Depends on: slices 1, 2 and 8. Browser walkthrough not run (needs a browser); API covered by tests.
+- [ ] Slice 10: Render explanations as markdown
+  - Files: `web/package.json` (add `react-markdown`), `web/src/Answer.tsx`, `web/src/styles.css`, `src/askdb/prompts.py` (explanation rules), `tests/unit/test_prompts.py`, `web/src/Answer.test.tsx` or a build check if no web test runner exists, `docs/SPEC.md` §14, §19, §22 item 11
+  - Verification: Unit: the explanation prompt asks for markdown only and forbids HTML. Build: `npm run build` passes. Manual: an explanation with `**bold**`, bullets and a `<script>` tag renders as bold text, a list, and visible literal text; no script runs. Assumptions render the same way.
+  - Note: react-markdown renders no raw HTML unless a raw-HTML plugin is added. Do not add one.
+  - Depends on: slices 4, 6 and 7. Not started; waiting for review of SPEC §14, §19, §22 item 11.

@@ -149,6 +149,7 @@ Support is responsible for choosing which databases are configured. Enforcement 
 - Row values are untrusted. The explanation prompt wraps all row data in clearly marked data blocks and instructs the model to treat them as data only.
 - When the result rows contain text values, the explanation is checked by a second Claude call. The judge receives the question and the explanation, and returns pass or fail on two criteria: the explanation stays within the result set, and it contains no instructions, SQL, or references to actions. A fail shows the table and a notice that the explanation could not be generated, instead of showing the explanation.
 - Results with only numeric and date columns skip the check.
+- Model output is rendered as markdown with raw HTML disabled. The browser never runs HTML that the model or a row value produces. The explanation prompt asks for plain markdown only: paragraphs, bold, and bullet lists.
 - Residual risk: a determined value can still influence the explanation wording. The DB is read-only, so the worst case is a misleading explanation with real values in the table. Documented as a known limitation.
 
 ## 15. LLM Data Handling
@@ -278,7 +279,7 @@ The sample set has 29 cases: 9 totals/trends, 5 rankings, 4 filters, 6 compariso
 ## 19. UI
 
 - **Layout:** left sidebar (database selector, conversation list grouped by database, delete action), main panel (chat with answers).
-- **Answer layout:** explanation text, assumptions, paged table (500-row cap), "Show query" toggle (collapsed), CSV export button.
+- **Answer layout:** explanation, assumptions, paged table (500-row cap), "Show query" toggle (collapsed), CSV export button. The explanation and assumptions are rendered as markdown in the browser (§14).
 - **Admin screen:** account creation and password reset, database management (add, edit, re-check, remove, with check errors), audit log viewer. Support role only.
 - **Responsive:** not required. Desktop browser on a laptop.
 
@@ -299,7 +300,7 @@ The sample set has 29 cases: 9 totals/trends, 5 rankings, 4 filters, 6 compariso
 
 ## 22. Decisions Log
 
-All ten open items from the requirements interview are decided. The table records each decision and where it is applied.
+All eleven open items from the requirements interview are decided. The table records each decision and where it is applied.
 
 | # | Item | Decision | Applied in |
 |---|---|---|---|
@@ -313,6 +314,7 @@ All ten open items from the requirements interview are decided. The table record
 | 8 | Relative-period rule | Ask for vague periods, and for clear periods outside the data coverage; otherwise use the calendar convention and state the period | §7.3 |
 | 9 | Path in database YAML | Literal path in the YAML | §16.1 |
 | 10 | Managing database configuration | Support adds, edits, re-checks and removes databases in the admin screen. Each is a YAML file, validated on save and live without a restart. The name is immutable. | §16.3, §16.4, §19 |
+| 11 | Explanation formatting | The explanation and assumptions are markdown, rendered in the browser with raw HTML disabled. The model is asked for paragraphs, bold and bullets only. | §14, §19 |
 
 ### Follow-up actions
 - **Item 1:** no company data-governance sign-off is recorded. Confirm it before connecting real data.
