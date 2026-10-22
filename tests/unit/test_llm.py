@@ -69,3 +69,65 @@ def test_missing_api_key_is_a_clear_error(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY is not set"):
         LLM(LLMSettings()).plan_sql("system", "q")
+
+
+def test_a_rejected_key_is_reported_as_a_config_problem_and_not_retried():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    error = anthropic.AuthenticationError(
+        "invalid x-api-key", response=httpx.Response(401, request=request), body=None
+    )
+
+    class Rejecting:
+        calls = 0
+
+        def create(self, **kwargs):
+            Rejecting.calls += 1
+            raise error
+
+    llm = LLM(LLMSettings())
+    llm._client = SimpleNamespace(messages=Rejecting())
+    with pytest.raises(LLMError, match="rejected the API key"):
+        llm.plan_sql("system", "q")
+    assert Rejecting.calls == 1
+
+
+def test_an_unknown_model_is_named_in_the_error():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    error = anthropic.NotFoundError("model not found", response=httpx.Response(404, request=request), body=None)
+
+    class Missing:
+        def create(self, **kwargs):
+            raise error
+
+    llm = LLM(LLMSettings())
+    llm._client = SimpleNamespace(messages=Missing())
+    with pytest.raises(LLMError, match="claude-sonnet-5-5 is not available"):
+        llm.plan_sql("system", "q")
+
+
+def test_workspace_id_from_the_environment_is_sent_as_a_header(monkeypatch):
+    captured = {}
+
+    class FakeAnthropic:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("askdb.llm.anthropic.Anthropic", FakeAnthropic)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "wrkspc_test123")
+    LLM(LLMSettings())._get_client()
+    assert captured["default_headers"] == {"anthropic-workspace-id": "wrkspc_test123"}
+
+
+def test_no_workspace_header_when_the_variable_is_unset(monkeypatch):
+    captured = {}
+
+    class FakeAnthropic:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("askdb.llm.anthropic.Anthropic", FakeAnthropic)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID", raising=False)
+    LLM(LLMSettings())._get_client()
+    assert captured["default_headers"] == {}

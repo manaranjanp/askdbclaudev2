@@ -58,6 +58,8 @@ class LLMSettings(BaseModel):
     sql_model: str = "claude-sonnet-5-5"
     explain_model: str = "claude-sonnet-5-5"
     api_key_env: str = "ANTHROPIC_API_KEY"
+    # Optional. Sent as the anthropic-workspace-id header when set; needed for keys not scoped to a workspace.
+    workspace_id_env: str = "ANTHROPIC_WORKSPACE_ID"
 
 
 class Limits(BaseModel):

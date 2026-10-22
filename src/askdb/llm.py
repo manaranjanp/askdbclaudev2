@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -59,6 +60,7 @@ JUDGE_TOOL: dict[str, Any] = {
 
 # One retry on an API error (SPEC §18).
 _ATTEMPTS = 2
+log = logging.getLogger("askdb.llm")
 
 
 class LLMError(Exception):
@@ -85,8 +87,12 @@ class LLM:
             key = os.environ.get(self.settings.api_key_env)
             if not key:
                 raise LLMError(f"The AI service is not configured: {self.settings.api_key_env} is not set.")
+            headers = {}
+            workspace = os.environ.get(self.settings.workspace_id_env)
+            if workspace:
+                headers["anthropic-workspace-id"] = workspace
             # Retries are handled in _call so there is exactly one place that counts them.
-            self._client = anthropic.Anthropic(api_key=key, max_retries=0)
+            self._client = anthropic.Anthropic(api_key=key, max_retries=0, default_headers=headers)
         return self._client
 
     def _call(self, **kwargs: Any) -> anthropic.types.Message:
@@ -96,7 +102,18 @@ class LLM:
             try:
                 return client.messages.create(**kwargs)
             except anthropic.APIError as exc:
+                log.warning("Claude API call failed: %s: %s", type(exc).__name__, exc)
                 last_error = exc
+                # Configuration faults will not clear on a retry, so say what to fix.
+                if isinstance(exc, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+                    raise LLMError(
+                        "The AI service rejected the API key. Check ANTHROPIC_API_KEY, then restart the API."
+                    ) from exc
+                if isinstance(exc, anthropic.NotFoundError):
+                    raise LLMError(
+                        f"The AI model {kwargs.get('model')} is not available. "
+                        "Check the model names in config/settings.yaml."
+                    ) from exc
         raise LLMError("The AI service did not respond. Please try again.") from last_error
 
     def plan_sql(self, system: str, question: str, history: Sequence[HistoryTurn] = ()) -> SqlPlan:

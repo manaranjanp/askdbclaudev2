@@ -84,6 +84,7 @@ Set these in **terminal A**. Replace the placeholder values.
 
 ```sh
 export ANTHROPIC_API_KEY="sk-ant-REPLACE_WITH_YOUR_KEY"
+export ANTHROPIC_WORKSPACE_ID="wrkspc_REPLACE_WITH_YOUR_WORKSPACE_ID"   # only if your key is not scoped to a workspace
 export ASKDB_CONFIG_DIR="$PWD/config"
 ```
 
@@ -94,6 +95,7 @@ export CLOUDMETRICS_DB_PATH="$PWD/tests/cloudmetrics/cloudmetrics.db"
 ```
 
 Rules for these variables:
+- `ANTHROPIC_WORKSPACE_ID` is optional. Set it when Anthropic reports that the key is not scoped to a workspace. Leave it unset for a workspace-scoped key.
 - `ANTHROPIC_API_KEY` is required to answer questions. Without it the app starts, but every question shows a configuration message. Never put the key in a file in this repository.
 - The app does not read a `.env` file. Set the variables in every terminal that runs the API, before starting it.
 - To keep the key out of your shell history, put the two `export` lines in a file outside the repository (for example `~/askdb_env.sh`), then run `source ~/askdb_env.sh` in terminal A.
