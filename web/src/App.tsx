@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Login, User } from "./Login";
+import { RawSqlBox } from "./RawSqlBox";
 import { Sidebar } from "./Sidebar";
 
 // undefined = still checking the session; null = signed out.
@@ -36,7 +37,7 @@ export function App() {
         {database === null ? (
           <p>Choose a database to start.</p>
         ) : (
-          <p>Selected: {database}</p>
+          <RawSqlBox database={database} />
         )}
       </main>
     </div>

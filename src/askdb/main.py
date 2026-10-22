@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI
 from askdb.appdb import init_schema
 from askdb.auth import User, current_user
 from askdb.config import load_settings
-from askdb.routes import admin_users, auth
+from askdb.routes import admin_users, auth, query_dev
 from askdb.startup import load_databases
 
 CONFIG_DIR_ENV = "ASKDB_CONFIG_DIR"
@@ -36,6 +36,7 @@ def create_app(config_dir: Path | None = None) -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(admin_users.router)
+    app.include_router(query_dev.router)
 
     @app.get("/api/databases")
     def list_databases(user: User = Depends(current_user)) -> list[dict[str, str]]:

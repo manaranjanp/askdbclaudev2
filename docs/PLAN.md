@@ -5,7 +5,7 @@
   - Files: `src/askdb/appdb.py`, `src/askdb/auth.py`, `src/askdb/routes/auth.py`, `src/askdb/routes/admin_users.py`, `src/askdb/cli.py`, `web/src/Login.tsx`, `web/src/App.tsx`, `tests/unit/test_auth.py`, `tests/integration/test_auth_routes.py`
   - Note: `GET /api/databases` is open until this slice lands. Add the session dependency to it here, and update `tests/integration/test_api_databases.py`.
   - Verification: Unit: hash and verify; wrong password fails; hash is not plaintext. Integration: unauthenticated `/api/databases` returns 401; non-support user gets 403 creating a user; password reset works and the old password stops working. Manual: log in, see the selector, log out, return to login.
-- [ ] Slice 3: Safe SQL runner (three read-only layers)
+- [x] Slice 3: Safe SQL runner (three read-only layers)
   - Files: `src/askdb/sqlguard.py`, `src/askdb/adapters/sqlite.py` (add `execute`), `src/askdb/routes/query_dev.py`, `web/src/RawSqlBox.tsx` (temporary, removed in Slice 4), `tests/unit/test_sqlguard.py`, `tests/integration/test_readonly_layers.py`
   - Note: `SqliteAdapter.connect()` already opens `mode=ro` and sets `PRAGMA query_only`. `execute` must reuse it and must not open its own connection. Add `execute` to the abstract `DatabaseAdapter` in `adapters/base.py` as well.
   - Verification: Unit: accepts a single `SELECT` and a CTE ending in `SELECT`; rejects `DELETE`, `DROP`, `INSERT`, `UPDATE`, `PRAGMA`, and `SELECT 1; DELETE ...`. Integration: adapter rejects `DELETE` when the validator is bypassed; a write inside a CTE is rolled back when the validator is bypassed; a recursive CTE is cancelled at the 60s timeout; a 10,000-row select returns 500 rows and total 10,000.
