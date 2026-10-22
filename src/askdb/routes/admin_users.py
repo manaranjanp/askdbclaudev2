@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -19,6 +19,13 @@ class NewUser(BaseModel):
 
 class PasswordReset(BaseModel):
     password: str = Field(min_length=MIN_PASSWORD_LENGTH)
+
+
+@router.get("")
+def list_users(request: Request) -> list[dict[str, Any]]:
+    with open_appdb(request.app.state.appdb_path) as conn:
+        rows = conn.execute("SELECT id, username, role, created_at FROM users ORDER BY username").fetchall()
+    return [{"id": r["id"], "username": r["username"], "role": r["role"], "created_at": r["created_at"]} for r in rows]
 
 
 @router.post("", status_code=201, response_model=UserOut)

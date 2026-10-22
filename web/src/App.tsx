@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AdminPage } from "./admin/AdminPage";
 import { Chat } from "./Chat";
 import { Login, User } from "./Login";
 import { ConversationSummary, Sidebar } from "./Sidebar";
@@ -12,6 +13,7 @@ export function App() {
   const [chatKey, setChatKey] = useState(0);
   // Bumped whenever the conversation list may have changed.
   const [listVersion, setListVersion] = useState(0);
+  const [view, setView] = useState<"chat" | "admin">("chat");
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -59,11 +61,18 @@ export function App() {
       <main className="main">
         <header className="topbar">
           <span>Signed in as {user.username}</span>
+          {user.role === "support" && (
+            <button type="button" onClick={() => setView(view === "admin" ? "chat" : "admin")}>
+              {view === "admin" ? "Back to questions" : "Admin"}
+            </button>
+          )}
           <button type="button" onClick={signOut}>
             Sign out
           </button>
         </header>
-        {database === null ? (
+        {view === "admin" ? (
+          <AdminPage />
+        ) : database === null ? (
           <p>Choose a database to start.</p>
         ) : (
           <Chat
