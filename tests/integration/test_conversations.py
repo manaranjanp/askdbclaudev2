@@ -139,3 +139,61 @@ def test_switching_database_starts_a_new_conversation(two_users):
         json={"database": "nonexistent", "question": "x", "conversation_id": conversation_id},
     )
     assert response.status_code == 404
+
+
+def test_conversation_sent_with_another_database_is_refused(two_users, config_dir):
+    ana, _ = two_users
+    ana.app.state.llm = FakeLLM(SqlPlan("SELECT 1 AS x", False, None, []))
+    conversation_id = ask(ana, "in cloudmetrics")["conversation_id"]
+
+    # A second database config over the same file, so the database check can be reached.
+    fixture_yaml = (FIXTURE_DIR / "cloudmetrics.yaml").read_text(encoding="utf-8")
+    (config_dir / "databases" / "other.yaml").write_text(
+        fixture_yaml.replace("name: cloudmetrics", "name: other"), encoding="utf-8"
+    )
+    with TestClient(create_app(config_dir)) as client:
+        client.post("/api/auth/login", json={"username": "ana", "password": PASSWORD})
+        response = client.post(
+            "/api/ask",
+            json={"database": "other", "question": "follow-up", "conversation_id": conversation_id},
+        )
+    assert response.status_code == 404
+
+
+def test_outgoing_messages_carry_no_result_rows(two_users):
+    from askdb.prompts import history_messages
+
+    ana, _ = two_users
+    fake = FakeLLM(
+        SqlPlan("SELECT plan_name FROM plans ORDER BY plan_id", False, None, []),
+        explanation="Four plans.",
+    )
+    ana.app.state.llm = fake
+    conversation_id = ask(ana, "list the plans")["conversation_id"]  # rows include "Starter"
+
+    ask(ana, "which is cheapest?", conversation_id=conversation_id)
+
+    messages = history_messages(list(fake.plan_histories[-1]), "which is cheapest?")
+    assert "Starter" not in str(messages)
+    assert "Four plans." in str(messages)
+
+
+def test_question_for_a_conversation_deleted_mid_flight_returns_404(two_users, monkeypatch):
+    from askdb import conversations as conversation_store
+
+    ana, _ = two_users
+    ana.app.state.llm = FakeLLM(SqlPlan("SELECT 1 AS x", False, None, []))
+    conversation_id = ask(ana, "first")["conversation_id"]
+
+    real_append = conversation_store.append_message
+
+    def delete_then_append(conn, conversation_id, **kwargs):
+        conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+        return real_append(conn, conversation_id, **kwargs)
+
+    monkeypatch.setattr(conversation_store, "append_message", delete_then_append)
+    response = ana.post(
+        "/api/ask",
+        json={"database": "cloudmetrics", "question": "second", "conversation_id": conversation_id},
+    )
+    assert response.status_code == 404

@@ -1,5 +1,6 @@
 import csv
 import io
+import sqlite3
 import time
 from datetime import date
 from pathlib import Path
@@ -86,14 +87,18 @@ def ask(body: AskRequest, request: Request, user: User = Depends(current_user)) 
         conversation_id = body.conversation_id
         if conversation_id is None:
             conversation_id = conversations.create(conn, user.id, body.database, body.question)
-        conversations.append_message(
-            conn,
-            conversation_id,
-            question=body.question,
-            sql=outcome.sql if outcome.status in ("answer", "error", "timeout") else None,
-            summary=_summary(outcome),
-            payload=payload,
-        )
+        try:
+            conversations.append_message(
+                conn,
+                conversation_id,
+                question=body.question,
+                sql=outcome.sql if outcome.status in ("answer", "error", "timeout") else None,
+                summary=_summary(outcome),
+                payload=payload,
+            )
+        except sqlite3.IntegrityError as exc:
+            # The conversation was deleted while this question was running.
+            raise HTTPException(status_code=404, detail="Conversation not found") from exc
         record(conn, user.id, body.database, body.question, outcome, duration_ms)
 
     return {**payload, "conversation_id": conversation_id}
