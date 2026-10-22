@@ -1,150 +1,253 @@
-# Local deployment guide
+# AskDB: local deployment runbook
 
-This guide runs AskDB on one laptop for a small team (SPEC §1, §20). It covers installing, configuring, starting, creating the first support account, connecting a database, and backing up.
+Follow the steps in order. Each step gives the command to run and what you should see. Run every command from the repository root unless a step says otherwise.
 
-## What runs
+You will run two processes in two terminals:
 
-| Process | Command | Port | Purpose |
-|---|---|---|---|
-| API | `uv run uvicorn askdb.main:app` | 8000 | FastAPI backend. Reads config, runs queries, calls Claude. |
-| Web | `npm run dev` in `web/` | 5173 | React UI. Forwards `/api` requests to port 8000. |
+| Terminal | Process | Address |
+|---|---|---|
+| A | API server (FastAPI) | http://127.0.0.1:8000 |
+| B | Web UI (React dev server) | http://localhost:5173 |
 
-Both processes must run at the same time, from the repository root (the API) and from `web/` (the UI).
+Do not expose these ports beyond this laptop.
 
-> **Limitation.** The backend does not serve the built UI, and `npm run preview` does not forward `/api`. Until a production static-serving step is added, use `npm run dev` for the UI. Do not expose these ports beyond the laptop.
+---
 
-## 1. Prerequisites
+## Step 1. Open the repository
 
-- macOS or Linux with a terminal.
-- Python 3.10 or newer, managed by [uv](https://docs.astral.sh/uv/) (`brew install uv`, or the installer on the uv site).
-- Node.js 18 or newer and npm.
-- An Anthropic API key, with access to `claude-sonnet-5-5`.
-- A copy of the data you want to query, as a SQLite file.
+```sh
+cd /Users/manaranjanp/Documents/Work/Consulting/Intuit/Claude/project/askdb
+```
 
-## 2. Install
+Check that you are in the right place:
 
-From the repository root:
+```sh
+ls pyproject.toml web/package.json config/settings.yaml
+```
+
+Expected: all three paths are listed with no error.
+
+---
+
+## Step 2. Check the dependencies
+
+Run each command. Each must print a version at or above the minimum.
+
+| Tool | Command | Minimum |
+|---|---|---|
+| uv (manages Python) | `uv --version` | any recent version |
+| Node.js | `node --version` | v18 |
+| npm | `npm --version` | any |
+
+If uv is missing, install it with `brew install uv`, or use the installer at https://docs.astral.sh/uv/. If Node is missing, install Node 18 or newer from https://nodejs.org.
+
+uv installs Python 3.10 or newer for you on the first `uv sync`. You do not need to install Python yourself.
+
+---
+
+## Step 3. Install the Python packages
 
 ```sh
 uv sync
-cd web && npm install && cd ..
 ```
 
-Check the install:
+Expected: the last lines read `Installed N packages` or `Audited N packages`, with no error.
+
+## Step 4. Install the web packages
 
 ```sh
-uv run pytest -q          # expect all tests to pass; 3 are skipped without an API key
+cd web
+npm install
+cd ..
+```
+
+Expected: npm finishes with `added N packages`. A warning about a newer npm is harmless.
+
+## Step 5. Check that the build works
+
+```sh
+uv run pytest -q
 cd web && npm run build && cd ..
 ```
 
-## 3. Configure
+Expected:
+- pytest ends with `154 passed, 3 skipped` (or a higher pass count). The 3 skipped tests need an API key, so skipping them is correct.
+- The build ends with `✓ built in` and no errors.
 
-### 3.1 Environment variables
+If pytest fails, stop here and fix the failure before continuing.
 
-The app reads secrets only from environment variables (SPEC §16). It does not load a `.env` file, so export the variables in each terminal that starts the API:
+---
+
+## Step 6. Set the environment variables
+
+Set these in **terminal A**. Replace the placeholder values.
 
 ```sh
-export ANTHROPIC_API_KEY="sk-ant-..."   # your key; never put it in a YAML file or in git
-export ASKDB_CONFIG_DIR="$PWD/config"   # optional; this is the default when started from the repo root
+export ANTHROPIC_API_KEY="sk-ant-REPLACE_WITH_YOUR_KEY"
+export ASKDB_CONFIG_DIR="$PWD/config"
 ```
 
-To keep the key out of shell history, put the `export` line in a file outside the repository, such as `~/.askdb_env`, and run `source ~/.askdb_env` before starting the API.
+Only if you use the sample database (Step 7), also set:
 
-### 3.2 App settings
-
-`config/settings.yaml` holds the app settings. It ships with working defaults:
-
-```yaml
-app_db_path: data/app.db          # accounts, conversations, audit log (created on first start)
-llm:
-  sql_model: claude-sonnet-5-5
-  explain_model: claude-sonnet-5-5
-  api_key_env: ANTHROPIC_API_KEY  # the variable name, not the key
-limits:
-  display_rows: 500
-  explain_token_budget: 4000
-  query_timeout_seconds: 60
-  audit_retention_days: 30
+```sh
+export CLOUDMETRICS_DB_PATH="$PWD/tests/cloudmetrics/cloudmetrics.db"
 ```
 
-`app_db_path` is relative to the directory the API starts in, so start the API from the repository root. Changes to this file take effect on restart.
+Rules for these variables:
+- `ANTHROPIC_API_KEY` is required to answer questions. Without it the app starts, but every question shows a configuration message. Never put the key in a file in this repository.
+- The app does not read a `.env` file. Set the variables in every terminal that runs the API, before starting it.
+- To keep the key out of your shell history, put the two `export` lines in a file outside the repository (for example `~/askdb_env.sh`), then run `source ~/askdb_env.sh` in terminal A.
 
-### 3.3 Adding databases
+Check:
 
-The normal way is the admin screen (SPEC §16.4). Sign in as support, open **Admin**, then **Databases**, then **Add database**:
+```sh
+echo "$ASKDB_CONFIG_DIR"
+```
 
-1. Enter the database file path. It is read by the server, so it must be a path the server process can open, such as `/Users/you/data/sales.db`. An environment variable is written `${NAME}`, and the variable must be set in the terminal that starts the API.
-2. Paste the schema YAML, or choose a `.yaml` file. Use the format of `tests/cloudmetrics/cloudmetrics.yaml`. The schema's `name` is the database's identity and cannot change later.
-3. Click **Validate** to check without saving. **Save** runs the same checks and refuses the save, with the list of errors, if any check fails. Nothing is written on a refusal.
+Expected: the full path to `config`, ending in `/config`.
 
-A saved database appears in the analysts' selector at once, with no restart. **Edit** changes the path or schema, **Re-check** runs the checks again on the saved file (useful after moving or repairing a database file), and **Remove** deletes the database. Existing conversations stay readable, but new questions to a removed database fail.
+---
 
-Each saved database is a YAML file in `config/databases/`, written in canonical form. Comments are not kept in files the admin screen writes.
+## Step 7. Add a database (optional here)
 
-You can still place YAML files in `config/databases/` by hand. They load at startup, and a file that fails its checks is disabled, with its errors shown under **Databases**.
-
-The sample database, by hand:
+You can add a database in the browser later (Step 13), which is the usual way. To start with the sample database, copy its config into place:
 
 ```sh
 mkdir -p config/databases
 cp tests/cloudmetrics/cloudmetrics.yaml config/databases/
-export CLOUDMETRICS_DB_PATH="$PWD/tests/cloudmetrics/cloudmetrics.db"
 ```
 
-The app opens every database read-only, so the database file is never changed. Support chooses which files are configured, since the server can open any SQLite file it can read (SPEC §13).
+Expected: `config/databases/cloudmetrics.yaml` exists. The sample needs `CLOUDMETRICS_DB_PATH` from Step 6.
 
-## 4. Start
+---
 
-Terminal 1, from the repository root (the API):
-
-```sh
-uv run uvicorn askdb.main:app --host 127.0.0.1 --port 8000
-```
-
-Terminal 2 (the UI):
-
-```sh
-cd web && npm run dev
-```
-
-Open http://localhost:5173.
-
-Check the API directly, without the UI:
-
-```sh
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/databases   # expect 401 before sign-in
-```
-
-On the first start the app creates `data/app.db` and its tables.
-
-## 5. Create the first support account
-
-There are no accounts until you create one. Use the command line, which asks for the password twice (SPEC §12):
+## Step 8. Create the first support account
 
 ```sh
 uv run python -m askdb.cli create-user --username your.name --role support
 ```
 
-Use `--role analyst` for analyst accounts. Once signed in, a support user creates other accounts and resets passwords from the **Admin** screen. Account creation is admin-only; there is no self-registration.
+You will be asked for a password twice. It must be at least 8 characters.
 
-## 6. First-use check
+Expected: `Created support account your.name.`
 
-1. Open http://localhost:5173 and sign in.
-2. Choose the database in the sidebar.
-3. Ask: "How many active customers?" for the sample database. You should see an explanation, the SQL under **Show query**, and a table.
-4. Sign out, and sign back in. The conversation is still listed.
-5. As support, open **Admin**: the database appears under **Database status**, and the question appears in the **Audit log**.
+Notes:
+- This is the only way to create the first account. Later accounts are created from the Admin screen.
+- Use `--role analyst` for an analyst account.
+- Run it once for each account. Running it again with the same name fails with "already exists".
 
-For the full error-state walkthrough, see `docs/manual-checklist.md`.
+---
 
-## 7. Backups
+## Step 9. Start the API server (terminal A)
 
-Everything the app stores is in two places:
+Make sure terminal A has the variables from Step 6 and that you are in the repository root.
 
-- `data/app.db`: accounts, sessions, conversations, and the audit log (which includes result rows). Treat it as sensitive.
-- `config/` and the database files you configured: these are the source of your settings and data.
+```sh
+uv run uvicorn askdb.main:app --host 127.0.0.1 --port 8000
+```
 
-To back up while the API is stopped:
+Expected output, ending with:
+
+```
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000
+```
+
+Leave this terminal running. Startup logs appear here. A database whose startup checks fail is logged here as `database <name> disabled: ...`.
+
+The first start creates `data/app.db`.
+
+---
+
+## Step 10. Start the web UI (terminal B)
+
+Open a **second** terminal and go to the repository:
+
+```sh
+cd /Users/manaranjanp/Documents/Work/Consulting/Intuit/Claude/project/askdb/web
+npm run dev
+```
+
+Expected output, ending with:
+
+```
+  VITE v5.x.x  ready in ... ms
+  ➜  Local:   http://localhost:5173/
+```
+
+Leave this terminal running. Terminal B does not need the API variables.
+
+---
+
+## Step 11. Check that both processes respond
+
+In a third terminal, run:
+
+```sh
+curl -s -o /dev/null -w "API without sign-in: %{http_code}\n" http://127.0.0.1:8000/api/databases
+curl -s -o /dev/null -w "UI: %{http_code}\n" http://localhost:5173/
+```
+
+Expected:
+- `API without sign-in: 401`. The API is up and requires a sign-in.
+- `UI: 200`.
+
+Any other result: see Troubleshooting below.
+
+---
+
+## Step 12. Sign in and check the first question
+
+1. Open http://localhost:5173 in a browser.
+2. Sign in with the support account from Step 8.
+3. In the sidebar, choose the database from the **Database** selector. If it is empty, do Step 13 first.
+4. Ask: `How many active customers?`
+
+Expected: an explanation, a table, and a **Show query** button under the answer.
+
+---
+
+## Step 13. Add a database from the browser
+
+Do this if you did not copy the sample in Step 7, or to add your own database.
+
+1. As the support user, click **Admin** (top bar), then the **Databases** tab, then **Add database**.
+2. Enter the **Database file path**. For the sample, use the full path to `tests/cloudmetrics/cloudmetrics.db`, or `${CLOUDMETRICS_DB_PATH}`.
+3. Paste the schema YAML into the text box, or choose a `.yaml` file. For the sample, use `tests/cloudmetrics/cloudmetrics.yaml`.
+4. Click **Validate**. Expected: "The configuration is valid. Nothing has been saved."
+5. Click **Save**. Expected: "Saved cloudmetrics. It is available to analysts now."
+
+The database appears in the selector at once. No restart is needed.
+
+If Validate or Save shows errors, nothing was written. Fix each listed error and try again.
+
+---
+
+## Step 14. Check that analysts can use it
+
+1. Click **Sign out**, then sign in as an analyst. Create the analyst first in **Admin → Users** if you have not already.
+2. Choose the database and ask a question.
+
+Expected: the same kind of answer as Step 12.
+
+---
+
+## Stopping the app
+
+1. In terminal B, press `Ctrl+C`.
+2. In terminal A, press `Ctrl+C`.
+
+Expected: both processes stop. Your data stays in `data/app.db` and `config/`.
+
+## Starting it again later
+
+Repeat Steps 1, 6, 9 and 10. Steps 2 to 5 and 8 are needed only once, or after an update.
+
+---
+
+## Backups
+
+Stop the API (terminal A, `Ctrl+C`), then run:
 
 ```sh
 mkdir -p backups/$(date +%Y%m%d)
@@ -152,9 +255,13 @@ cp data/app.db backups/$(date +%Y%m%d)/
 cp -R config backups/$(date +%Y%m%d)/
 ```
 
-Keep backups on an encrypted disk. The audit log is purged after 30 days (SPEC §10), so older entries are not in later backups.
+Expected: the folder `backups/<today>/` holds `app.db` and `config/`. Restart the API afterwards.
 
-## 8. Updating
+`data/app.db` holds accounts, conversations, and the audit log with result rows, so keep backups on an encrypted disk. The audit log is purged after 30 days.
+
+## Updating
+
+Stop both processes, then:
 
 ```sh
 git pull
@@ -163,19 +270,23 @@ cd web && npm install && cd ..
 uv run pytest -q
 ```
 
-Restart the API after pulling. The app creates missing tables at startup, but it has no migrations: if a release changes an existing table, back up `data/app.db` first and read the release notes.
+Expected: pytest passes. Then start again from Step 9. The app creates new tables at startup. It has no migrations, so if a release changes an existing table, back up `data/app.db` first.
 
-## 9. Troubleshooting
+---
 
-| Symptom | Likely cause | Fix |
+## Troubleshooting
+
+| What you see | Cause | Fix |
 |---|---|---|
+| `uv: command not found` | uv not installed | Step 2 |
+| `npm: command not found` or `npm run dev` fails at once | Node not installed, or you are not in `web/` | Step 2, and `cd web` first |
+| `Address already in use` on port 8000 or 5173 | Another process is using the port | Stop it, or pick another port. For the API, change the `proxy` target in `web/vite.config.ts` to match |
 | UI shows "Could not load databases: HTTP 401" | Not signed in, or the session expired (12 hours) | Sign in again |
-| Sign-in fails with "Invalid username or password" | Wrong credentials | Ask support to reset the password |
-| A database is missing from the selector | Its startup check failed | Open **Admin → Database status** and read the errors; fix the file or the YAML and restart |
-| "environment variable X is not set" in the database status | A `${NAME}` path has no value | Export the variable and restart the API |
-| "The AI service is not configured: ANTHROPIC_API_KEY is not set" | Key not exported in the API's terminal | Export the key and restart the API |
-| "The AI service did not respond" | Network or API outage | Check connectivity; the app already retried once |
-| UI loads but questions fail with a network error | API not running on port 8000 | Start the API in terminal 1 |
-| Port 8000 in use | Another process | Use `--port 8001` and change the `proxy` target in `web/vite.config.ts` to match |
+| "Invalid username or password" | Wrong credentials | Ask a support user to reset the password in **Admin → Users** |
+| A question says "The AI service is not configured: ANTHROPIC_API_KEY is not set" | Key not exported in terminal A | Run Step 6 in terminal A, then restart Step 9 |
+| A question says "The AI service did not respond" | Network or API outage | Check your connection and try again |
+| A database is missing from the selector | Its checks failed at startup, or it was never saved | **Admin → Databases** shows the errors. Fix them, then use **Re-check** or save again |
+| "environment variable X is not set" on a database | Its path uses `${X}` and the variable is not set in terminal A | Export it in terminal A and restart Step 9 |
+| Browser shows a blank page | UI not started, or the API is down | Check terminal B shows `ready`, then run Step 11 |
 
-Logs are written to the terminal running the API. Database startup failures are logged at error level there. Routine audit-retention runs are logged at info level, which the API does not display by default.
+Logs appear in the terminal running each process.
