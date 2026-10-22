@@ -23,8 +23,10 @@ class FakeLLM:
         self.plan = plan
         self.explanation = explanation
         self.explain_calls: list[str] = []
+        self.plan_histories: list[tuple] = []
 
-    def plan_sql(self, system: str, question: str) -> SqlPlan:
+    def plan_sql(self, system: str, question: str, history=()) -> SqlPlan:
+        self.plan_histories.append(tuple(history))
         return self.plan
 
     def explain(self, system: str, message: str) -> str:

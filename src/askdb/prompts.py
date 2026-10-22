@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -38,6 +40,28 @@ def render_ddl(db: DatabaseConfig) -> str:
     return "\n\n".join(blocks)
 
 
+@dataclass(frozen=True)
+class HistoryTurn:
+    """One earlier turn of the conversation. Result rows are never part of it (SPEC §5)."""
+
+    question: str
+    sql: str | None
+    summary: str  # the explanation, or the clarifying question or error that was shown
+
+
+def history_messages(history: Sequence[HistoryTurn], question: str) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    for turn in history:
+        messages.append({"role": "user", "content": turn.question})
+        if turn.sql:
+            reply = f"SQL:\n{turn.sql}\n\nExplanation: {turn.summary}"
+        else:
+            reply = f"No SQL was run. Shown to the user: {turn.summary}"
+        messages.append({"role": "assistant", "content": reply})
+    messages.append({"role": "user", "content": question})
+    return messages
+
+
 def sql_system_prompt(db: DatabaseConfig, dialect: str, today: date) -> str:
     return (
         "You translate questions about one database into SQL.\n\n"
@@ -48,7 +72,9 @@ def sql_system_prompt(db: DatabaseConfig, dialect: str, today: date) -> str:
         "clarifying question in clarification.\n"
         "- Otherwise return exactly one SELECT statement in sql. Never write statements that change data.\n"
         "- List every assumption you made (date ranges, definitions, interpretations). When a relative "
-        "period is involved, state the period you used.\n\n"
+        "period is involved, state the period you used.\n"
+        "- Earlier turns may be provided. A follow-up may change the previous SQL. The earlier result "
+        "rows are not available to you; work from the SQL and explanations.\n\n"
         "## Database description\n"
         f"{db.description}\n\n"
         "## Tables\n"

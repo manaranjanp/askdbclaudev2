@@ -6,6 +6,7 @@ ambiguity and decline rules, and the injection check come in later slices.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -13,7 +14,13 @@ from typing import Any
 from askdb.adapters.base import DatabaseAdapter, QueryError, QueryTimeout
 from askdb.config import DatabaseConfig, Limits
 from askdb.llm import LLM, LLMError
-from askdb.prompts import explain_system_prompt, explain_user_message, fit_rows_to_budget, sql_system_prompt
+from askdb.prompts import (
+    HistoryTurn,
+    explain_system_prompt,
+    explain_user_message,
+    fit_rows_to_budget,
+    sql_system_prompt,
+)
 from askdb.sqlguard import UnsafeSQL, validate
 
 
@@ -37,9 +44,10 @@ def answer_question(
     llm: LLM,
     limits: Limits,
     today: date,
+    history: Sequence[HistoryTurn] = (),
 ) -> Outcome:
     try:
-        plan = llm.plan_sql(sql_system_prompt(db, adapter.dialect, today), question)
+        plan = llm.plan_sql(sql_system_prompt(db, adapter.dialect, today), question, history)
     except LLMError as exc:
         return Outcome("error", message=str(exc))
 

@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from askdb.config import load_database_config
-from askdb.prompts import explain_user_message, render_ddl, sql_system_prompt
+from askdb.prompts import HistoryTurn, explain_user_message, history_messages, render_ddl, sql_system_prompt
 
 FIXTURE = Path(__file__).resolve().parents[1] / "cloudmetrics" / "cloudmetrics.yaml"
 
@@ -51,3 +51,19 @@ def test_explain_message_wraps_rows_as_data_and_states_coverage():
     assert "<result_data>" in message and "</result_data>" in message
     assert "rows_shown: 1" in message
     assert "total_rows: 10" in message
+
+
+def test_history_sends_question_sql_and_explanation_in_order():
+    history = [HistoryTurn("list the plans", "SELECT plan_name FROM plans", "Four plans.")]
+    messages = history_messages(history, "only the expensive ones")
+    assert messages[0] == {"role": "user", "content": "list the plans"}
+    assert "SELECT plan_name FROM plans" in messages[1]["content"]
+    assert "Four plans." in messages[1]["content"]
+    assert messages[-1] == {"role": "user", "content": "only the expensive ones"}
+
+
+def test_history_with_no_sql_says_nothing_was_run():
+    history = [HistoryTurn("show recent", None, "Which period do you mean?")]
+    messages = history_messages(history, "last month")
+    assert "No SQL was run" in messages[1]["content"]
+    assert "Which period do you mean?" in messages[1]["content"]

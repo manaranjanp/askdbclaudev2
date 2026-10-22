@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import anthropic
 
 from askdb.config import LLMSettings
+from askdb.prompts import HistoryTurn, history_messages
 
 SQL_TOOL: dict[str, Any] = {
     "name": "answer_plan",
@@ -71,12 +73,12 @@ class LLM:
                 last_error = exc
         raise LLMError("The AI service did not respond. Please try again.") from last_error
 
-    def plan_sql(self, system: str, question: str) -> SqlPlan:
+    def plan_sql(self, system: str, question: str, history: Sequence[HistoryTurn] = ()) -> SqlPlan:
         response = self._call(
             model=self.settings.sql_model,
             max_tokens=2000,
             system=system,
-            messages=[{"role": "user", "content": question}],
+            messages=history_messages(history, question),
             tools=[SQL_TOOL],
             tool_choice={"type": "tool", "name": SQL_TOOL["name"]},
         )

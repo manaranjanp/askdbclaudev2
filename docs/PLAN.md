@@ -13,7 +13,7 @@
   - Files: `src/askdb/prompts.py`, `src/askdb/llm.py`, `src/askdb/pipeline.py`, `src/askdb/audit.py`, `src/askdb/routes/ask.py`, `web/src/Chat.tsx`, `web/src/Answer.tsx`, `web/src/ResultTable.tsx`, `web/src/ShowQuery.tsx`, `web/src/CsvExport.ts`, `tests/unit/test_prompts.py`, `tests/unit/test_token_budget.py`, `tests/integration/test_ask_flow.py`, `tests/integration/test_smoke_live.py`
   - Note: `limits.explain_token_budget` is `None` in `AppSettings` until it is set in `config/settings.yaml`. Set a provisional value here so the explain step can run. Slice 7 measures the real value.
   - Verification: Unit: prompt snapshot contains every table's DDL and the description verbatim; token budget cuts rows and the output says so; CSV has the 500-row cap and a truncation note. Integration (stubbed LLM): a question yields an answer and one audit row; blocked SQL yields a blocked audit row and no execution. Manual (live): "How many active customers?" returns an explained table.
-- [ ] Slice 5: Conversations and follow-up context
+- [x] Slice 5: Conversations and follow-up context
   - Files: `src/askdb/appdb.py` (add `conversations`, `messages`), `src/askdb/conversations.py`, `src/askdb/prompts.py`, `src/askdb/routes/conversations.py`, `web/src/Sidebar.tsx`, `tests/integration/test_conversations.py`, `tests/unit/test_prompts.py`
   - Verification: Integration: user A cannot list, load, or delete user B's conversation (404); delete removes the conversation and messages but keeps audit rows. Unit: follow-up prompt includes prior SQL and explanations and excludes prior result rows. Manual: "now filter that by region" works; history survives reload; switching database starts a new conversation.
 - [ ] Slice 6: Guardrails and error states
