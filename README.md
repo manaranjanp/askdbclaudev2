@@ -15,7 +15,7 @@ cd web && npm install
 
 Config is read at startup from `ASKDB_CONFIG_DIR` (default `config/`):
 
-- `config/databases/*.yaml`: one file per database (format in `docs/SPEC.md` §16.1).
+- `config/databases/*.yaml`: one file per database (format in `docs/SPEC.md` §16.1). Support can also add, edit and remove them from the admin screen (§16.4), which writes these files.
 - `config/settings.yaml`: optional app settings (SPEC §16.2). Missing means defaults.
 
 Database paths may reference environment variables with `${NAME}`. The sample

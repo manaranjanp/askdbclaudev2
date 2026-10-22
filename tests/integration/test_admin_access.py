@@ -13,7 +13,12 @@ ADMIN_CALLS = [
     ("get", "/api/admin/users", None),
     ("post", "/api/admin/users", {"username": "zed", "password": "another-long-pass", "role": "analyst"}),
     ("post", "/api/admin/users/1/password", {"password": "another-long-pass"}),
-    ("get", "/api/admin/status", None),
+    ("get", "/api/admin/databases", None),
+    ("post", "/api/admin/databases/validate", {"path": "/x.db", "schema_yaml": "name: x"}),
+    ("post", "/api/admin/databases", {"path": "/x.db", "schema_yaml": "name: x"}),
+    ("put", "/api/admin/databases/x", {"path": "/x.db", "schema_yaml": "name: x"}),
+    ("post", "/api/admin/databases/x/recheck", None),
+    ("delete", "/api/admin/databases/x", None),
     ("get", "/api/admin/audit", None),
 ]
 
@@ -52,7 +57,7 @@ def test_support_can_use_every_admin_route(config_dir, add_user):
     with TestClient(create_app(config_dir)) as client:
         client.post("/api/auth/login", json={"username": "sam", "password": PASSWORD})
         assert client.get("/api/admin/users").status_code == 200
-        assert client.get("/api/admin/status").status_code == 200
+        assert client.get("/api/admin/databases").status_code == 200
         assert client.get("/api/admin/audit").status_code == 200
 
 
@@ -83,7 +88,7 @@ def test_analyst_cannot_read_audit_entries_they_produced(config_dir, add_user, t
         assert support.get("/api/admin/audit").json()["total"] == 1
 
 
-def test_status_panel_shows_a_broken_database_error(config_dir, add_user):
+def test_database_list_shows_a_broken_file_with_its_errors(config_dir, add_user):
     (config_dir / "databases").mkdir()
     (config_dir / "databases" / "broken.yaml").write_text(
         "name: broken\ndisplay_name: Broken\npath: /nope/missing.db\ncalendar:\n"
@@ -94,10 +99,12 @@ def test_status_panel_shows_a_broken_database_error(config_dir, add_user):
     add_user("sam", role="support")
     with TestClient(create_app(config_dir)) as client:
         client.post("/api/auth/login", json={"username": "sam", "password": PASSWORD})
-        rows = client.get("/api/admin/status").json()
+        rows = client.get("/api/admin/databases").json()
     [broken] = rows
+    assert broken["file"] == "broken"
     assert broken["name"] == "broken"
     assert broken["enabled"] is False
+    assert broken["path"] == "/nope/missing.db"
     assert any("database file not found" in e for e in broken["errors"])
 
 

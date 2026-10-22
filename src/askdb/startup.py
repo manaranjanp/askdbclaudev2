@@ -1,4 +1,4 @@
-"""Startup checks for each configured database (SPEC §16.3)."""
+"""Database checks: at startup for each file, and again on each save or re-check (SPEC §16.3)."""
 
 from __future__ import annotations
 
@@ -26,9 +26,7 @@ class DatabaseStatus:
         return self.config is not None and not self.errors
 
 
-def _check_schema(
-    config: DatabaseConfig, tables: dict[str, list[ColumnInfo]]
-) -> list[str]:
+def check_schema(config: DatabaseConfig, tables: dict[str, list[ColumnInfo]]) -> list[str]:
     errors: list[str] = []
     for table in config.tables:
         if table.name not in tables:
@@ -68,7 +66,16 @@ def check_database(config: DatabaseConfig) -> list[str]:
         tables = SqliteAdapter(path).introspect()
     except sqlite3.Error as exc:
         return [f"cannot open database read-only: {exc}"]
-    return _check_schema(config, tables)
+    return check_schema(config, tables)
+
+
+def load_status(source: Path) -> DatabaseStatus:
+    """Load one config file and run the checks on it. Never raises for a bad file."""
+    try:
+        config = load_database_config(source)
+    except ConfigError as exc:
+        return DatabaseStatus(source.stem, source, None, [str(exc)])
+    return DatabaseStatus(config.name, source, config, check_database(config))
 
 
 def load_databases(config_dir: Path) -> list[DatabaseStatus]:
@@ -76,25 +83,20 @@ def load_databases(config_dir: Path) -> list[DatabaseStatus]:
     statuses: list[DatabaseStatus] = []
     seen: set[str] = set()
     for source in database_files(config_dir):
-        try:
-            config = load_database_config(source)
-        except ConfigError as exc:
-            statuses.append(DatabaseStatus(source.stem, source, None, [str(exc)]))
-            continue
-        if config.name in seen:
+        status = load_status(source)
+        if status.config is not None and status.config.name in seen:
             statuses.append(
                 DatabaseStatus(
-                    config.name,
+                    status.config.name,
                     source,
                     None,
-                    [f"duplicate database name {config.name}"],
+                    [f"duplicate database name {status.config.name}"],
                 )
             )
             continue
-        seen.add(config.name)
-        statuses.append(
-            DatabaseStatus(config.name, source, config, check_database(config))
-        )
+        if status.config is not None:
+            seen.add(status.config.name)
+        statuses.append(status)
     for status in statuses:
         for error in status.errors:
             log.error("database %s disabled: %s", status.name, error)

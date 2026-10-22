@@ -71,7 +71,7 @@ export function App() {
           </button>
         </header>
         {view === "admin" ? (
-          <AdminPage />
+          <AdminPage onDatabasesChanged={() => setListVersion((v) => v + 1)} />
         ) : database === null ? (
           <p>Choose a database to start.</p>
         ) : (

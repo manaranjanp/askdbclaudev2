@@ -38,9 +38,12 @@ export function Sidebar({
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<DatabaseSummary[]>;
       })
-      .then(setDatabases)
+      .then((list) => {
+        setDatabases(list);
+        setError(null);
+      })
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     fetch("/api/conversations")

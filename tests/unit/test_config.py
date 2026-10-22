@@ -121,3 +121,31 @@ def test_invalid_settings_value_is_an_error(tmp_path):
     path = write(tmp_path, "limits:\n  display_rows: -1\n", name="settings.yaml")
     with pytest.raises(ConfigError, match="display_rows"):
         load_settings(path)
+
+
+def test_dump_then_parse_gives_back_the_same_mapping():
+    from askdb.config import dump_database_yaml, parse_database_text
+
+    original = parse_database_text(FIXTURE.read_text(encoding="utf-8"), "fixture")
+    text = dump_database_yaml(original)
+    assert parse_database_text(text, "dumped") == original
+
+
+def test_dump_keeps_multi_line_descriptions_as_literal_blocks_and_env_paths_unexpanded():
+    from askdb.config import dump_database_yaml, parse_database_text
+
+    original = parse_database_text(FIXTURE.read_text(encoding="utf-8"), "fixture")
+    text = dump_database_yaml(original)
+    assert "description: |" in text
+    assert "path: ${CLOUDMETRICS_DB_PATH}" in text
+
+
+def test_database_from_dict_expands_the_path_and_reports_a_missing_variable(monkeypatch):
+    from askdb.config import database_from_dict, parse_database_text
+
+    data = parse_database_text(FIXTURE.read_text(encoding="utf-8"), "fixture")
+    monkeypatch.delenv("CLOUDMETRICS_DB_PATH", raising=False)
+    with pytest.raises(ConfigError, match="CLOUDMETRICS_DB_PATH is not set"):
+        database_from_dict(data, "fixture")
+    data["path"] = "/literal/path.db"
+    assert database_from_dict(data, "fixture").path == "/literal/path.db"

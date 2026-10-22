@@ -1,10 +1,11 @@
-"""Load and validate the database and app-settings YAML files (SPEC §16)."""
+"""Load, validate and write the database and app-settings YAML files (SPEC §16)."""
 
 from __future__ import annotations
 
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -89,20 +90,6 @@ def expand_env(value: str) -> str:
     return _ENV_REF.sub(replace, value)
 
 
-def _read_mapping(path: Path) -> dict:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ConfigError(f"{path}: cannot read file: {exc}") from exc
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"{path}: invalid YAML: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ConfigError(f"{path}: top level must be a mapping")
-    return data
-
-
 def _describe(exc: ValidationError) -> str:
     return "; ".join(
         f"{'.'.join(str(part) for part in err['loc']) or '(root)'}: {err['msg']}"
@@ -110,17 +97,58 @@ def _describe(exc: ValidationError) -> str:
     )
 
 
-def load_database_config(path: Path) -> DatabaseConfig:
-    data = _read_mapping(path)
+def parse_database_text(text: str, label: str) -> dict[str, Any]:
+    """Parse YAML text into a mapping. ``label`` prefixes every error message."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{label}: invalid YAML: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ConfigError(f"{label}: top level must be a mapping")
+    return data
+
+
+def database_from_dict(data: dict[str, Any], label: str) -> DatabaseConfig:
+    """Validate a parsed database mapping. The ``path`` may use ``${NAME}``."""
+    data = dict(data)
     if isinstance(data.get("path"), str):
         try:
             data["path"] = expand_env(data["path"])
         except ConfigError as exc:
-            raise ConfigError(f"{path}: {exc}") from exc
+            raise ConfigError(f"{label}: {exc}") from exc
     try:
         return DatabaseConfig.model_validate(data)
     except ValidationError as exc:
-        raise ConfigError(f"{path}: {_describe(exc)}") from exc
+        raise ConfigError(f"{label}: {_describe(exc)}") from exc
+
+
+def _read_mapping(path: Path) -> dict[str, Any]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"{path}: cannot read file: {exc}") from exc
+    return parse_database_text(text, str(path))
+
+
+def load_database_config(path: Path) -> DatabaseConfig:
+    return database_from_dict(_read_mapping(path), str(path))
+
+
+class _LiteralDumper(yaml.SafeDumper):
+    """Writes multi-line strings as literal blocks, so descriptions stay readable."""
+
+
+def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_LiteralDumper.add_representer(str, _represent_str)
+
+
+def dump_database_yaml(data: dict[str, Any]) -> str:
+    """Canonical YAML for a validated database mapping. Keeps ``path`` as written (e.g. ``${NAME}``)."""
+    return yaml.dump(data, Dumper=_LiteralDumper, sort_keys=False, allow_unicode=True, width=100)
 
 
 def load_settings(path: Path) -> AppSettings:

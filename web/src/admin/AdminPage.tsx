@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { AuditPanel } from "./AuditPanel";
-import { StatusPanel } from "./StatusPanel";
+import { DatabasesPanel } from "./DatabasesPanel";
 import { UsersPanel } from "./UsersPanel";
 
-type Tab = "users" | "status" | "audit";
+type Tab = "users" | "databases" | "audit";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "users", label: "Users" },
-  { id: "status", label: "Database status" },
+  { id: "databases", label: "Databases" },
   { id: "audit", label: "Audit log" },
 ];
 
 // Support role only. The server enforces this on every admin route.
-export function AdminPage() {
+type Props = { onDatabasesChanged: () => void };
+
+export function AdminPage({ onDatabasesChanged }: Props) {
   const [tab, setTab] = useState<Tab>("users");
   return (
     <section className="admin">
@@ -31,7 +33,7 @@ export function AdminPage() {
         ))}
       </nav>
       {tab === "users" && <UsersPanel />}
-      {tab === "status" && <StatusPanel />}
+      {tab === "databases" && <DatabasesPanel onChanged={onDatabasesChanged} />}
       {tab === "audit" && <AuditPanel />}
     </section>
   );

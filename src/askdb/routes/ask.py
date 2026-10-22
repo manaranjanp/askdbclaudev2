@@ -55,10 +55,7 @@ def _summary(outcome: Outcome) -> str:
 
 @router.post("/ask")
 def ask(body: AskRequest, request: Request, user: User = Depends(current_user)) -> dict[str, Any]:
-    status = next(
-        (s for s in request.app.state.databases if s.enabled and s.config.name == body.database),
-        None,
-    )
+    status = request.app.state.registry.enabled(body.database)
     if status is None:
         raise HTTPException(status_code=404, detail="Database not found")
 
