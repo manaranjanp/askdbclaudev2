@@ -1,7 +1,7 @@
 - [x] Slice 1: Config, SQLite adapter, startup checks, database selector
   - Files: `pyproject.toml`, `README.md`, `src/askdb/config.py`, `src/askdb/adapters/base.py`, `src/askdb/adapters/sqlite.py`, `src/askdb/startup.py`, `src/askdb/main.py`, `web/` scaffold, `web/src/Sidebar.tsx`, `tests/unit/test_config.py`, `tests/integration/test_startup_checks.py`
   - Verification: Unit: invalid YAML and missing required keys raise clear errors. Integration: cloudmetrics passes all checks; a copy with a renamed column, wrong type, bad `references` target, or missing file is disabled while the other database stays enabled. Manual: `uv run uvicorn askdb.main:app` lists CloudMetrics in the selector and omits the disabled database.
-- [ ] Slice 2: App DB, accounts, login
+- [x] Slice 2: App DB, accounts, login
   - Files: `src/askdb/appdb.py`, `src/askdb/auth.py`, `src/askdb/routes/auth.py`, `src/askdb/routes/admin_users.py`, `src/askdb/cli.py`, `web/src/Login.tsx`, `web/src/App.tsx`, `tests/unit/test_auth.py`, `tests/integration/test_auth_routes.py`
   - Note: `GET /api/databases` is open until this slice lands. Add the session dependency to it here, and update `tests/integration/test_api_databases.py`.
   - Verification: Unit: hash and verify; wrong password fails; hash is not plaintext. Integration: unauthenticated `/api/databases` returns 401; non-support user gets 403 creating a user; password reset works and the old password stops working. Manual: log in, see the selector, log out, return to login.

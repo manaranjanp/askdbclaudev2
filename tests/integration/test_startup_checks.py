@@ -1,5 +1,6 @@
 import shutil
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -125,6 +126,6 @@ def test_duplicate_name_disables_the_second_file(tmp_path, db_copy, monkeypatch)
 
 def test_adapter_refuses_writes(db_copy):
     adapter = SqliteAdapter(db_copy)
-    with adapter.connect() as conn:
+    with closing(adapter.connect()) as conn:
         with pytest.raises(sqlite3.OperationalError, match="readonly"):
             conn.execute("DELETE FROM customers")

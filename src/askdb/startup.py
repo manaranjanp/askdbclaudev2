@@ -9,7 +9,7 @@ from pathlib import Path
 
 from askdb.adapters.base import ColumnInfo
 from askdb.adapters.sqlite import SqliteAdapter
-from askdb.config import DatabaseConfig, ConfigError, database_files, load_database_config
+from askdb.config import ConfigError, DatabaseConfig, database_files, load_database_config
 
 log = logging.getLogger("askdb.startup")
 

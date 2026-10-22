@@ -72,6 +72,7 @@ class Limits(BaseModel):
 class AppSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    app_db_path: str = "data/app.db"
     llm: LLMSettings = Field(default_factory=LLMSettings)
     limits: Limits = Field(default_factory=Limits)
 

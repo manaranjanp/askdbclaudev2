@@ -8,13 +8,12 @@ from askdb.main import create_app
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "cloudmetrics"
 
 
-def test_selector_lists_healthy_databases_only(tmp_path, monkeypatch):
+def test_selector_lists_healthy_databases_only(tmp_path, monkeypatch, config_dir, add_user):
     db = tmp_path / "cloudmetrics.db"
     shutil.copy(FIXTURE_DIR / "cloudmetrics.db", db)
     monkeypatch.setenv("CLOUDMETRICS_DB_PATH", str(db))
 
-    config_dir = tmp_path / "config"
-    (config_dir / "databases").mkdir(parents=True)
+    (config_dir / "databases").mkdir()
     fixture_yaml = (FIXTURE_DIR / "cloudmetrics.yaml").read_text(encoding="utf-8")
     (config_dir / "databases" / "cloudmetrics.yaml").write_text(
         fixture_yaml, encoding="utf-8"
@@ -25,9 +24,11 @@ def test_selector_lists_healthy_databases_only(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
+    add_user("ana", role="analyst")
 
-    client = TestClient(create_app(config_dir))
-    response = client.get("/api/databases")
+    with TestClient(create_app(config_dir)) as client:
+        client.post("/api/auth/login", json={"username": "ana", "password": "correct horse battery"})
+        response = client.get("/api/databases")
 
     assert response.status_code == 200
     assert response.json() == [
