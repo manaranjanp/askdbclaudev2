@@ -14,7 +14,7 @@ v1 targets fewer than 10 users on a single laptop.
 - Answer totals/trends, rankings/top-N, filtered record lists, and segment comparisons.
 - Never change data. Never give a wrong answer silently.
 - Keep a private, long-lived history of each user's conversations.
-- Be configured per database entirely through YAML files that support maintains.
+- Be configured per database through YAML that support maintains, either as files or in the admin screen.
 
 **Non-goals (v1)**
 - Multi-database questions, scheduled reports, alerts, write-back, forecasting.
@@ -27,7 +27,7 @@ v1 targets fewer than 10 users on a single laptop.
 ## 3. Users
 
 - **Primary:** business analysts. Comfortable with numbers, no SQL.
-- **Secondary:** support staff. Maintain YAML configuration, create accounts, reset passwords, and review the audit log.
+- **Secondary:** support staff. Manage database configuration, create accounts, reset passwords, and review the audit log.
 
 ## 4. Architecture
 
@@ -38,7 +38,7 @@ v1 targets fewer than 10 users on a single laptop.
 | LLM | Anthropic Claude API, model `claude-sonnet-5-5` (set in app settings, Section 16.2; separate models for SQL generation and explanation) |
 | Data DB | SQLite, path set in the database YAML config |
 | App DB | SQLite, holds accounts, conversations, messages, and audit log |
-| Config | YAML: one file per database plus one app settings file, loaded at startup |
+| Config | YAML: one file per database, managed from the admin screen or as files; one app settings file loaded at startup |
 | Secrets | Referenced by environment-variable name in YAML, never stored in the file |
 | Hosting | Single process on a local laptop |
 
@@ -159,7 +159,7 @@ Support is responsible for choosing which databases are configured. Enforcement 
 
 ## 16. Configuration
 
-Two kinds of YAML file, both loaded at startup. Changes need a restart.
+Two kinds of YAML file. Database files are loaded at startup and can also be added, changed and removed at runtime from the admin screen (§16.4). App settings are loaded at startup, and changes need a restart.
 
 ### 16.1 Database files
 One file per database, in the configured config directory. The sample is `tests/cloudmetrics/cloudmetrics.yaml`.
@@ -167,7 +167,7 @@ One file per database, in the configured config directory. The sample is `tests/
 Top-level keys:
 - `name`: unique identifier. Used in the selector, the audit log, and the evaluation set's `database` field.
 - `display_name`: label shown in the UI.
-- `path`: literal SQLite file path. Always opened read-only.
+- `path`: SQLite file path, literal or `${NAME}` for an environment variable. Always opened read-only.
 - `calendar.fiscal_year_start_month`: `1` for a calendar year.
 - `description`: free-text schema description, sent to the model verbatim. Business rules and metric definitions live here and nowhere else.
 - `tables`: list of tables. Each has `name`, `description`, and `columns`. Each column has `name`, `type`, and optionally `primary_key: true`, `references: table.column`, and `description`.
@@ -208,12 +208,23 @@ limits:
 
 Secrets never appear in any YAML file. Secret values are read from environment variables named in the file.
 
-### 16.3 Startup checks
-For each configured database:
+### 16.3 Database checks
+The checks run at startup for each configured file, and again on every save or re-check from the admin screen (§16.4). For each database:
 - Confirm the file exists and opens read-only.
 - Confirm each configured table and column exists with the stated type, and that each `references` target exists.
-- A failed check disables that database. It is hidden from the selector and its error is shown in the admin screen. Other databases keep working.
-- Failures are logged at startup.
+- At startup, a failed check disables that database. It is hidden from the selector and its error is shown in the admin screen. Other databases keep working. Failures are logged at startup.
+- On a save from the admin screen, a failed check rejects the save and nothing is written. On a re-check, a failed check disables that database until it passes.
+
+### 16.4 Managing databases from the admin screen
+Support can add, edit, re-check and remove databases in the browser. Each saved database is a YAML file in the configured config directory, in the format of §16.1.
+- **Fields:** the database file path (literal or `${NAME}`), and the schema YAML (uploaded or pasted, at most 1 MB).
+- **Validation on save:** the YAML must parse and match §16.1. `name` must be unique and use only letters, digits, `_` and `-`. The file must pass the §16.3 checks. A save that fails is refused with the list of errors, and nothing is written.
+- **Stored form:** the server writes canonical YAML. Comments in a file written this way are not kept.
+- **Name:** immutable after creation. Conversations and audit entries refer to it.
+- **Effect:** a saved database takes effect at once, with no restart, and appears in the selector for analysts.
+- **Edit** replaces the path and schema. **Re-check** runs the §16.3 checks again on the saved file. **Remove** deletes the file from the selector. Existing conversations stay readable, and a follow-up to a removed database gets "Database not found".
+- **Access:** support only. The server can open any SQLite file its process can read, read-only, so support chooses which files are configured (see §13).
+- Files already in the config directory at startup are still loaded from disk (§16.3).
 
 ## 17. Validation and Test Fixtures
 
@@ -268,7 +279,7 @@ The sample set has 29 cases: 9 totals/trends, 5 rankings, 4 filters, 6 compariso
 
 - **Layout:** left sidebar (database selector, conversation list grouped by database, delete action), main panel (chat with answers).
 - **Answer layout:** explanation text, assumptions, paged table (500-row cap), "Show query" toggle (collapsed), CSV export button.
-- **Admin screen:** account creation and password reset, database status (including startup check failures), audit log viewer. Support role only.
+- **Admin screen:** account creation and password reset, database management (add, edit, re-check, remove, with check errors), audit log viewer. Support role only.
 - **Responsive:** not required. Desktop browser on a laptop.
 
 ## 20. Non-Functional
@@ -282,12 +293,13 @@ The sample set has 29 cases: 9 totals/trends, 5 rankings, 4 filters, 6 compariso
 
 - Unit: SQL validator (accept one SELECT, reject writes, multi-statement, PRAGMA), row cap, token budget truncation, YAML validation, startup checks.
 - Integration: the validation harness (Section 17.4) against `tests/cloudmetrics/cloudmetrics.db`.
+- Integration: a database saved from the admin screen is validated before it is written, takes effect without a restart, and refuses path traversal in its file name or name (§16.4).
 - Security: attempts to write through the chat (e.g., "delete all orders") must be blocked at each layer, tested by bypassing the validator to confirm the DB layer still rejects the write.
 - Manual: checklist of error states from Section 18.
 
 ## 22. Decisions Log
 
-All nine open items from the requirements interview are decided. The table records each decision and where it is applied.
+All ten open items from the requirements interview are decided. The table records each decision and where it is applied.
 
 | # | Item | Decision | Applied in |
 |---|---|---|---|
@@ -300,6 +312,7 @@ All nine open items from the requirements interview are decided. The table recor
 | 7 | Model choice | `claude-sonnet-5-5` for SQL and explanation | §4, §16.2 |
 | 8 | Relative-period rule | Ask for vague periods, and for clear periods outside the data coverage; otherwise use the calendar convention and state the period | §7.3 |
 | 9 | Path in database YAML | Literal path in the YAML | §16.1 |
+| 10 | Managing database configuration | Support adds, edits, re-checks and removes databases in the admin screen. Each is a YAML file, validated on save and live without a restart. The name is immutable. | §16.3, §16.4, §19 |
 
 ### Follow-up actions
 - **Item 1:** no company data-governance sign-off is recorded. Confirm it before connecting real data.
@@ -320,3 +333,5 @@ All nine open items from the requirements interview are decided. The table recor
 - SSO
 - Streaming responses
 - Suggested-option clarifications
+- Uploading SQLite files through the browser
+- Generating the schema from the database
