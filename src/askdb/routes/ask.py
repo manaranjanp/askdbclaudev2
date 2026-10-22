@@ -92,7 +92,7 @@ def ask(body: AskRequest, request: Request, user: User = Depends(current_user)) 
                 conn,
                 conversation_id,
                 question=body.question,
-                sql=outcome.sql if outcome.status in ("answer", "error", "timeout") else None,
+                sql=outcome.sql if outcome.status in ("answer", "empty", "error", "timeout") else None,
                 summary=_summary(outcome),
                 payload=payload,
             )

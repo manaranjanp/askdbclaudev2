@@ -1,40 +1,43 @@
-"""The answer pipeline for one question (SPEC §6).
-
-Slice 4 covers the happy path plus the basic error outcomes. Repair, the
-ambiguity and decline rules, and the injection check come in later slices.
-"""
+"""The answer pipeline for one question (SPEC §6, §7, §18)."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
 
 from askdb.adapters.base import DatabaseAdapter, QueryError, QueryTimeout
 from askdb.config import DatabaseConfig, Limits
-from askdb.llm import LLM, LLMError
+from askdb.llm import LLM, LLMError, SqlPlan
+from askdb.models import Outcome
 from askdb.prompts import (
     HistoryTurn,
     explain_system_prompt,
     explain_user_message,
     fit_rows_to_budget,
+    repair_request,
     sql_system_prompt,
 )
 from askdb.sqlguard import UnsafeSQL, validate
 
+__all__ = ["Outcome", "answer_question"]
 
-@dataclass
-class Outcome:
-    status: str  # answer | clarify | blocked | timeout | error
-    message: str | None = None
-    sql: str | None = None
-    assumptions: list[str] = field(default_factory=list)
-    explanation: str | None = None
-    columns: list[str] = field(default_factory=list)
-    rows: list[tuple[Any, ...]] = field(default_factory=list)
-    total: int = 0
-    truncated: bool = False
+DEFAULT_DECLINE = "I can only answer data questions about this database."
+DEFAULT_NO_DATA = "That data is not in this database."
+DEFAULT_CLARIFY = "Could you say more about what you need?"
+REPHRASE = "Please rephrase."
+
+
+def _early_outcome(plan: SqlPlan) -> Outcome | None:
+    """Outcomes that end the question before any SQL runs."""
+    if plan.kind == "non_data":
+        return Outcome("declined", message=plan.message or DEFAULT_DECLINE)
+    if plan.kind == "not_in_schema":
+        return Outcome("no_data", message=plan.message or DEFAULT_NO_DATA)
+    if plan.ambiguous:
+        return Outcome("clarify", message=plan.clarification or DEFAULT_CLARIFY, assumptions=plan.assumptions)
+    if not plan.sql.strip():
+        return Outcome("error", message=f"The AI service did not produce a query. {REPHRASE}")
+    return None
 
 
 def answer_question(
@@ -46,32 +49,46 @@ def answer_question(
     today: date,
     history: Sequence[HistoryTurn] = (),
 ) -> Outcome:
+    system = sql_system_prompt(db, adapter.dialect, today)
     try:
-        plan = llm.plan_sql(sql_system_prompt(db, adapter.dialect, today), question, history)
+        plan = llm.plan_sql(system, question, history)
     except LLMError as exc:
         return Outcome("error", message=str(exc))
+    early = _early_outcome(plan)
+    if early is not None:
+        return early
 
-    if plan.ambiguous:
+    # One run, and at most one repair if the database rejects the SQL (SPEC §6, step 5).
+    for attempt in range(2):
+        base = {"sql": plan.sql, "assumptions": plan.assumptions}
+        try:
+            validate(plan.sql)
+        except UnsafeSQL as exc:
+            return Outcome("blocked", message=f"That question could not be run safely: {exc}.", **base)
+        try:
+            result = adapter.execute(plan.sql, limits.display_rows, limits.query_timeout_seconds)
+            break
+        except QueryTimeout as exc:
+            return Outcome("timeout", message=f"{exc}. Try narrowing the question.", **base)
+        except QueryError as exc:
+            if attempt == 1:
+                return Outcome("error", message=f"The query failed: {exc}. {REPHRASE}", **base)
+            try:
+                plan = llm.plan_sql(system, repair_request(question, plan.sql, str(exc)), history)
+            except LLMError as llm_exc:
+                return Outcome("error", message=str(llm_exc), **base)
+            early = _early_outcome(plan)
+            if early is not None:
+                return early
+
+    if result.total == 0:
         return Outcome(
-            "clarify",
-            message=plan.clarification or "Could you say more about what you need?",
+            "empty",
+            message="No rows matched.",
+            sql=plan.sql,
             assumptions=plan.assumptions,
+            columns=result.columns,
         )
-    if not plan.sql.strip():
-        return Outcome("error", message="The AI service did not produce a query. Please rephrase.")
-
-    base = {"sql": plan.sql, "assumptions": plan.assumptions}
-    try:
-        validate(plan.sql)
-    except UnsafeSQL as exc:
-        return Outcome("blocked", message=f"That question could not be run safely: {exc}.", **base)
-
-    try:
-        result = adapter.execute(plan.sql, limits.display_rows, limits.query_timeout_seconds)
-    except QueryTimeout as exc:
-        return Outcome("timeout", message=f"{exc}. Try narrowing the question.", **base)
-    except QueryError as exc:
-        return Outcome("error", message=f"The query failed: {exc}. Please rephrase.", **base)
 
     explained = fit_rows_to_budget(result.rows, limits.explain_token_budget)
     try:
@@ -80,14 +97,15 @@ def answer_question(
             explain_user_message(question, plan.sql, plan.assumptions, result.columns, explained, result.total),
         )
     except LLMError as exc:
-        return Outcome("error", message=str(exc), **base)
+        return Outcome("error", message=str(exc), sql=plan.sql, assumptions=plan.assumptions)
 
     return Outcome(
         "answer",
         explanation=explanation,
+        sql=plan.sql,
+        assumptions=plan.assumptions,
         columns=result.columns,
         rows=result.rows,
         total=result.total,
         truncated=result.truncated,
-        **base,
     )

@@ -3,7 +3,7 @@ import { ResultTable } from "./ResultTable";
 import { ShowQuery } from "./ShowQuery";
 
 export type AskResponse = {
-  status: "answer" | "clarify" | "blocked" | "timeout" | "error";
+  status: "answer" | "clarify" | "declined" | "no_data" | "empty" | "blocked" | "timeout" | "error";
   message: string | null;
   sql: string | null;
   assumptions: string[];
@@ -17,10 +17,31 @@ export type AskResponse = {
 
 type Props = { response: AskResponse; question: string };
 
+// Statuses where the user is asked something or told why nothing ran. Not failures.
+const NOTICE = new Set(["clarify", "declined", "no_data"]);
+
 export function Answer({ response, question }: Props) {
+  if (NOTICE.has(response.status)) {
+    return (
+      <p role="status" className={`notice ${response.status}`}>
+        {response.message}
+      </p>
+    );
+  }
+
+  if (response.status === "empty") {
+    return (
+      <div className="answer">
+        <p role="status" className="empty">
+          {response.message}
+        </p>
+        {response.sql && <ShowQuery sql={response.sql} />}
+      </div>
+    );
+  }
+
   if (response.status !== "answer") {
-    const role = response.status === "clarify" ? "status" : "alert";
-    return <p role={role}>{response.message}</p>;
+    return <p role="alert">{response.message}</p>;
   }
 
   return (

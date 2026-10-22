@@ -27,6 +27,17 @@ SQL_TOOL: dict[str, Any] = {
                 "type": "string",
                 "description": "One clarifying question for the user. Only when ambiguous.",
             },
+            "kind": {
+                "type": "string",
+                "enum": ["query", "non_data", "not_in_schema"],
+                "description": "query for a data question. non_data when the request is not a question "
+                "about the data. not_in_schema when the data is not in the tables.",
+            },
+            "message": {
+                "type": "string",
+                "description": "For non_data or not_in_schema: a short reply to the user. It says what "
+                "this database can answer, using the database description.",
+            },
             "assumptions": {"type": "array", "items": {"type": "string"}},
         },
         "required": ["sql", "ambiguous", "assumptions"],
@@ -47,6 +58,8 @@ class SqlPlan:
     ambiguous: bool
     clarification: str | None
     assumptions: list[str]
+    kind: str = "query"
+    message: str | None = None
 
 
 class LLM:
@@ -90,6 +103,8 @@ class LLM:
                     ambiguous=bool(data.get("ambiguous", False)),
                     clarification=data.get("clarification") or None,
                     assumptions=[str(a) for a in data.get("assumptions", [])],
+                    kind=str(data.get("kind") or "query"),
+                    message=data.get("message") or None,
                 )
         raise LLMError("The AI service returned no query plan. Please try again.")
 

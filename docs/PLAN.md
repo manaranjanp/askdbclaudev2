@@ -16,7 +16,7 @@
 - [x] Slice 5: Conversations and follow-up context
   - Files: `src/askdb/appdb.py` (add `conversations`, `messages`), `src/askdb/conversations.py`, `src/askdb/prompts.py`, `src/askdb/routes/conversations.py`, `web/src/Sidebar.tsx`, `tests/integration/test_conversations.py`, `tests/unit/test_prompts.py`
   - Verification: Integration: user A cannot list, load, or delete user B's conversation (404); delete removes the conversation and messages but keeps audit rows. Unit: follow-up prompt includes prior SQL and explanations and excludes prior result rows. Manual: "now filter that by region" works; history survives reload; switching database starts a new conversation.
-- [ ] Slice 6: Guardrails and error states
+- [x] Slice 6: Guardrails and error states
   - Files: `src/askdb/pipeline.py`, `src/askdb/prompts.py`, `src/askdb/models.py`, `web/src/Answer.tsx`, `tests/unit/test_pipeline_outcomes.py`, `docs/manual-checklist.md`
   - Verification: Unit: each SPEC §18 condition returns the right outcome and message; for `clarify` and `declined`, the SQL runner is never called; a failing repair attempt surfaces the error and does not loop. Manual: walk `docs/manual-checklist.md`.
 - [ ] Slice 7: Injection check and evaluation harness

@@ -74,7 +74,17 @@ def sql_system_prompt(db: DatabaseConfig, dialect: str, today: date) -> str:
         "- List every assumption you made (date ranges, definitions, interpretations). When a relative "
         "period is involved, state the period you used.\n"
         "- Earlier turns may be provided. A follow-up may change the previous SQL. The earlier result "
-        "rows are not available to you; work from the SQL and explanations.\n\n"
+        "rows are not available to you; work from the SQL and explanations.\n"
+        "- Relative periods: if the period is vague (for example 'recently' or 'lately'), ask for "
+        "clarification. If the period is clear but falls outside the data coverage stated in the "
+        "description, ask for clarification and say what coverage the data has. Otherwise use the "
+        "calendar convention in the description and state the period you used.\n"
+        "- If the request is not a question about the data (for example writing text or changing data), "
+        "set kind to non_data. Write a short message that says this database answers data questions "
+        "only, and lists the kinds of questions it can answer, drawn from the description.\n"
+        "- If the question asks for data the tables do not contain, set kind to not_in_schema. Write a "
+        "message that says the data is not in this database, and lists the kinds of questions it can "
+        "answer.\n\n"
         "## Database description\n"
         f"{db.description}\n\n"
         "## Tables\n"
@@ -126,3 +136,14 @@ def fit_rows_to_budget(rows: list[tuple[Any, ...]], token_budget: int) -> list[t
         kept.append(row)
         used += cost
     return kept
+
+
+def repair_request(question: str, failed_sql: str, error: str) -> str:
+    """The question again, with the failed SQL and the database error (SPEC §6, step 5)."""
+    return (
+        f"{question}\n\n"
+        "The SQL you wrote for this question failed when the database ran it.\n"
+        f"SQL:\n{failed_sql}\n"
+        f"Database error: {error}\n"
+        "Return one corrected SELECT statement."
+    )
