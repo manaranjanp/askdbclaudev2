@@ -44,6 +44,19 @@ SQL_TOOL: dict[str, Any] = {
     },
 }
 
+JUDGE_TOOL: dict[str, Any] = {
+    "name": "judge_explanation",
+    "description": "Pass or fail the explanation against the two criteria.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "verdict": {"type": "string", "enum": ["pass", "fail"]},
+            "reason": {"type": "string"},
+        },
+        "required": ["verdict", "reason"],
+    },
+}
+
 # One retry on an API error (SPEC §18).
 _ATTEMPTS = 2
 
@@ -107,6 +120,20 @@ class LLM:
                     message=data.get("message") or None,
                 )
         raise LLMError("The AI service returned no query plan. Please try again.")
+
+    def judge(self, system: str, message: str) -> tuple[bool, str]:
+        response = self._call(
+            model=self.settings.explain_model,
+            max_tokens=300,
+            system=system,
+            messages=[{"role": "user", "content": message}],
+            tools=[JUDGE_TOOL],
+            tool_choice={"type": "tool", "name": JUDGE_TOOL["name"]},
+        )
+        for block in response.content:
+            if block.type == "tool_use":
+                return str(block.input.get("verdict")) == "pass", str(block.input.get("reason", ""))
+        raise LLMError("The AI service returned no verdict.")
 
     def explain(self, system: str, message: str) -> str:
         response = self._call(

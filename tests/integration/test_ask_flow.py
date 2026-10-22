@@ -33,6 +33,11 @@ class FakeLLM:
         self.explain_calls.append(message)
         return self.explanation
 
+    verdict = True  # set to False to simulate a failed injection check
+
+    def judge(self, system: str, message: str) -> tuple[bool, str]:
+        return self.verdict, "stub"
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch, config_dir, add_user, app_db):

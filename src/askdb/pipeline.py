@@ -8,6 +8,7 @@ from datetime import date
 from askdb.adapters.base import DatabaseAdapter, QueryError, QueryTimeout
 from askdb.config import DatabaseConfig, Limits
 from askdb.llm import LLM, LLMError, SqlPlan
+from askdb.judge import explanation_passes, has_text_values
 from askdb.models import Outcome
 from askdb.prompts import (
     HistoryTurn,
@@ -25,6 +26,7 @@ DEFAULT_DECLINE = "I can only answer data questions about this database."
 DEFAULT_NO_DATA = "That data is not in this database."
 DEFAULT_CLARIFY = "Could you say more about what you need?"
 REPHRASE = "Please rephrase."
+WITHHELD = "The explanation could not be generated. The table is shown instead."
 
 
 def _early_outcome(plan: SqlPlan) -> Outcome | None:
@@ -99,9 +101,17 @@ def answer_question(
     except LLMError as exc:
         return Outcome("error", message=str(exc), sql=plan.sql, assumptions=plan.assumptions)
 
+    notice = None
+    if has_text_values(explained) and not explanation_passes(
+        llm, question, explanation, result.columns, explained
+    ):
+        explanation = None
+        notice = WITHHELD
+
     return Outcome(
         "answer",
         explanation=explanation,
+        notice=notice,
         sql=plan.sql,
         assumptions=plan.assumptions,
         columns=result.columns,

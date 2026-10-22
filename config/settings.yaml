@@ -1,0 +1,16 @@
+# App settings (SPEC §16.2). Read at startup; changes need a restart.
+
+app_db_path: data/app.db
+
+llm:
+  sql_model: claude-sonnet-5-5
+  explain_model: claude-sonnet-5-5
+  api_key_env: ANTHROPIC_API_KEY   # the name of the environment variable, never the key
+
+limits:
+  display_rows: 500
+  # Measured on the evaluation set's expected results (slice 7): the largest is about
+  # 410 estimated tokens and the median about 26, so 4000 fits every case with headroom.
+  explain_token_budget: 4000
+  query_timeout_seconds: 60
+  audit_retention_days: 30

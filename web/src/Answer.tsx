@@ -13,6 +13,7 @@ export type AskResponse = {
   total: number;
   truncated: boolean;
   csv: string | null;
+  notice: string | null;
 };
 
 type Props = { response: AskResponse; question: string };
@@ -46,7 +47,12 @@ export function Answer({ response, question }: Props) {
 
   return (
     <div className="answer">
-      <p className="explanation">{response.explanation}</p>
+      {response.explanation && <p className="explanation">{response.explanation}</p>}
+      {response.notice && (
+        <p role="status" className="notice">
+          {response.notice}
+        </p>
+      )}
       {response.assumptions.length > 0 && (
         <div className="assumptions">
           <strong>Assumptions</strong>

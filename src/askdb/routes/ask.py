@@ -44,6 +44,7 @@ def to_json(outcome: Outcome) -> dict[str, Any]:
         "rows": [list(row) for row in outcome.rows],
         "total": outcome.total,
         "truncated": outcome.truncated,
+        "notice": outcome.notice,
         "csv": _csv_text(outcome.columns, outcome.rows) if outcome.status == "answer" else None,
     }
 

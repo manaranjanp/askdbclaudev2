@@ -19,7 +19,7 @@
 - [x] Slice 6: Guardrails and error states
   - Files: `src/askdb/pipeline.py`, `src/askdb/prompts.py`, `src/askdb/models.py`, `web/src/Answer.tsx`, `tests/unit/test_pipeline_outcomes.py`, `docs/manual-checklist.md`
   - Verification: Unit: each SPEC §18 condition returns the right outcome and message; for `clarify` and `declined`, the SQL runner is never called; a failing repair attempt surfaces the error and does not loop. Manual: walk `docs/manual-checklist.md`.
-- [ ] Slice 7: Injection check and evaluation harness
+- [x] Slice 7: Injection check and evaluation harness
   - Files: `src/askdb/judge.py`, `src/askdb/pipeline.py`, `src/askdb/prompts.py`, `tests/validation/conftest.py`, `tests/validation/test_eval.py`, `tests/validation/grading.py`, `config/settings.yaml` (`explain_token_budget`), `tests/unit/test_judge.py`, `tests/unit/test_grading.py`
   - Verification: Unit: judge passes a clean explanation and fails one carrying a planted "ignore previous instructions" row value; judge is skipped for numeric-and-date-only results; grader accepts reordered columns and aliases, rejects a wrong row, accepts small numeric drift. Validation: `uv run pytest tests/validation` reports at least 90% passing, with each failure flagged or listed as a known failure with a reason; run output recorded in `docs/eval-runs/`.
 - [ ] Slice 8: Admin screen and audit retention

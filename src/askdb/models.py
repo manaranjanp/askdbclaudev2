@@ -28,3 +28,4 @@ class Outcome:
     rows: list[tuple[Any, ...]] = field(default_factory=list)
     total: int = 0
     truncated: bool = False
+    notice: str | None = None
