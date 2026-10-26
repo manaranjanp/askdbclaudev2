@@ -5,7 +5,8 @@ import httpx
 import pytest
 
 from askdb.config import LLMSettings
-from askdb.llm import LLM, LLMError
+from askdb.llm import LLM, LLMError, total_usage, track_usage
+from askdb.models import Usage
 
 
 def connection_error() -> anthropic.APIConnectionError:
@@ -26,8 +27,14 @@ class ScriptedMessages:
         return self.response
 
 
-def tool_response(**data):
-    return SimpleNamespace(content=[SimpleNamespace(type="tool_use", input=data)])
+def tool_response(input_tokens=0, output_tokens=0, **data):
+    usage = SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
+    return SimpleNamespace(content=[SimpleNamespace(type="tool_use", input=data)], usage=usage)
+
+
+def text_response(text, input_tokens=0, output_tokens=0):
+    usage = SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
+    return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], usage=usage)
 
 
 def llm_with(messages: ScriptedMessages) -> LLM:
@@ -131,3 +138,29 @@ def test_no_workspace_header_when_the_variable_is_unset(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID", raising=False)
     LLM(LLMSettings())._get_client()
     assert captured["default_headers"] == {}
+
+
+def test_usage_of_each_successful_call_is_tracked_and_failed_attempts_are_not():
+    messages = ScriptedMessages(failures=1, response=tool_response(10, 4, sql="SELECT 1", assumptions=[]))
+    llm = llm_with(messages)
+    with track_usage() as calls:
+        llm.plan_sql("system", "question")
+    assert messages.calls == 2
+    assert calls == [Usage(10, 4)]
+
+
+def test_explain_calls_are_tracked():
+    llm = llm_with(ScriptedMessages(failures=0, response=text_response("There are 42.", 300, 60)))
+    with track_usage() as calls:
+        assert llm.explain("system", "message") == "There are 42."
+    assert calls == [Usage(300, 60)]
+
+
+def test_calls_outside_track_usage_still_work():
+    llm = llm_with(ScriptedMessages(failures=0, response=tool_response(10, 4, sql="SELECT 1", assumptions=[])))
+    assert llm.plan_sql("system", "question").sql == "SELECT 1"
+
+
+def test_total_usage_adds_every_call():
+    assert total_usage([Usage(100, 20), Usage(300, 50)]) == Usage(400, 70)
+    assert total_usage([]) == Usage()

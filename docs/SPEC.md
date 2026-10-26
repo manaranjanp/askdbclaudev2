@@ -62,7 +62,7 @@ For each question:
 4. **Validate and run.** SQL goes through the read-only checks in Section 8. It runs with a 60-second timeout and a row cap (Section 9).
 5. **Execution error.** If the database returns an error, the error text goes back to the model once for one repair attempt. If the repaired SQL also fails, the user sees the error and is asked to rephrase.
 6. **Explain.** The model gets the question, SQL, assumptions, total row count, and the result rows up to the token budget (Section 9.2). It produces the plain-English explanation.
-7. **Respond.** The user sees the explanation, the table (capped), the assumptions, a collapsed "Show query" toggle, and the CSV export button.
+7. **Respond.** The user sees the explanation, the table (capped), the assumptions, a collapsed "Show query" toggle, and the CSV export button. Under each answer the chat shows the input and output tokens the model used for the question, summed over every call made for it (generate, repair, explain, and the injection check). Cost in currency is not shown in v1.
 
 Every answer is logged to the audit log (Section 10).
 

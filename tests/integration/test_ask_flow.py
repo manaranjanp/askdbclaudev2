@@ -4,12 +4,14 @@ import shutil
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from askdb.adapters.sqlite import SqliteAdapter
-from askdb.llm import SqlPlan
+from askdb.config import LLMSettings
+from askdb.llm import LLM, SqlPlan
 from askdb.main import create_app
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "cloudmetrics"
@@ -171,3 +173,28 @@ def test_audit_row_stores_the_result_rows(client, app_db):
     ask(client, "plans")
     stored = audit_rows(app_db)[-1]["result_rows"]
     assert '["Starter"]' in stored
+
+
+class ReportingMessages:
+    """The Claude API stand-in: plans SQL, then explains, reporting usage for each call."""
+
+    def create(self, **kwargs):
+        if "tools" in kwargs:
+            plan_input = {"sql": "SELECT COUNT(*) AS n FROM customers", "assumptions": []}
+            plan = SimpleNamespace(type="tool_use", input=plan_input)
+            return SimpleNamespace(content=[plan], usage=SimpleNamespace(input_tokens=100, output_tokens=20))
+        text = SimpleNamespace(type="text", text="There are some customers.")
+        return SimpleNamespace(content=[text], usage=SimpleNamespace(input_tokens=300, output_tokens=60))
+
+
+def test_answer_reports_tokens_and_a_saved_conversation_keeps_them(client):
+    llm = LLM(LLMSettings())
+    llm._client = SimpleNamespace(messages=ReportingMessages())
+    client.app.state.llm = llm
+
+    body = ask(client, "how many customers")
+
+    expected = {"input_tokens": 400, "output_tokens": 80}
+    assert body["usage"] == expected
+    conversation = client.get(f"/api/conversations/{body['conversation_id']}").json()
+    assert conversation["messages"][0]["answer"]["usage"] == expected

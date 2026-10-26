@@ -17,6 +17,17 @@ Status = Literal[
 ]
 
 
+@dataclass(frozen=True)
+class Usage:
+    """Tokens the model reported for the calls made while answering one question."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    def __add__(self, other: "Usage") -> "Usage":
+        return Usage(self.input_tokens + other.input_tokens, self.output_tokens + other.output_tokens)
+
+
 @dataclass
 class Outcome:
     status: Status
@@ -29,3 +40,4 @@ class Outcome:
     total: int = 0
     truncated: bool = False
     notice: str | None = None
+    usage: Usage = field(default_factory=Usage)

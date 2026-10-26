@@ -7,7 +7,7 @@ from datetime import date
 
 from askdb.adapters.base import DatabaseAdapter, QueryError, QueryTimeout
 from askdb.config import DatabaseConfig, Limits
-from askdb.llm import LLM, LLMError, SqlPlan
+from askdb.llm import LLM, LLMError, SqlPlan, total_usage, track_usage
 from askdb.judge import explanation_passes, has_text_values
 from askdb.models import Outcome
 from askdb.prompts import (
@@ -43,6 +43,21 @@ def _early_outcome(plan: SqlPlan) -> Outcome | None:
 
 
 def answer_question(
+    question: str,
+    db: DatabaseConfig,
+    adapter: DatabaseAdapter,
+    llm: LLM,
+    limits: Limits,
+    today: date,
+    history: Sequence[HistoryTurn] = (),
+) -> Outcome:
+    with track_usage() as calls:
+        outcome = _answer(question, db, adapter, llm, limits, today, history)
+    outcome.usage = total_usage(calls)
+    return outcome
+
+
+def _answer(
     question: str,
     db: DatabaseConfig,
     adapter: DatabaseAdapter,

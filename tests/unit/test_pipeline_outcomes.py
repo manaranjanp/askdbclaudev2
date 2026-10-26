@@ -1,10 +1,12 @@
 """One test per SPEC §18 condition. The LLM and the database are stubbed."""
 
 from datetime import date
+from types import SimpleNamespace
 
 from askdb.adapters.base import ColumnInfo, DatabaseAdapter, QueryError, QueryResult, QueryTimeout
-from askdb.config import DatabaseConfig, Limits
-from askdb.llm import LLMError, SqlPlan
+from askdb.config import DatabaseConfig, LLMSettings, Limits
+from askdb.llm import LLM, LLMError, SqlPlan
+from askdb.models import Usage
 from askdb.pipeline import answer_question
 
 TODAY = date(2026, 10, 21)
@@ -267,3 +269,40 @@ def test_planted_instruction_in_a_row_is_judged_as_data_not_obeyed():
     message = llm.judge_messages[0]
     assert "<result_data>" in message
     assert planted in message
+
+
+# --- token usage ----------------------------------------------------------
+
+
+class ReportingMessages:
+    """Answers the plan call with SQL and the explain call with text, reporting usage for each."""
+
+    def create(self, **kwargs):
+        if "tools" in kwargs:
+            plan_input = {"sql": "SELECT 1", "ambiguous": False, "assumptions": []}
+            plan = SimpleNamespace(type="tool_use", input=plan_input)
+            return SimpleNamespace(content=[plan], usage=SimpleNamespace(input_tokens=100, output_tokens=20))
+        text = SimpleNamespace(type="text", text="There are 42.")
+        return SimpleNamespace(content=[text], usage=SimpleNamespace(input_tokens=300, output_tokens=60))
+
+
+def test_outcome_reports_the_tokens_of_every_model_call_for_the_question():
+    llm = LLM(LLMSettings())
+    llm._client = SimpleNamespace(messages=ReportingMessages())
+    outcome = run(llm, ScriptedAdapter([one_row()]))
+    assert outcome.status == "answer"
+    assert outcome.usage == Usage(400, 80)
+
+
+def test_refused_question_still_reports_the_tokens_it_used():
+    class Refusing:
+        def create(self, **kwargs):
+            refusal = {"sql": "", "kind": "non_data", "message": "No.", "assumptions": []}
+            plan = SimpleNamespace(type="tool_use", input=refusal)
+            return SimpleNamespace(content=[plan], usage=SimpleNamespace(input_tokens=90, output_tokens=5))
+
+    llm = LLM(LLMSettings())
+    llm._client = SimpleNamespace(messages=Refusing())
+    outcome = run(llm, ScriptedAdapter([]))
+    assert outcome.status == "declined"
+    assert outcome.usage == Usage(90, 5)

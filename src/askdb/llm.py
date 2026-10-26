@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
 import anthropic
 
 from askdb.config import LLMSettings
+from askdb.models import Usage
 from askdb.prompts import HistoryTurn, history_messages
 
 SQL_TOOL: dict[str, Any] = {
@@ -62,6 +65,24 @@ JUDGE_TOOL: dict[str, Any] = {
 _ATTEMPTS = 2
 log = logging.getLogger("askdb.llm")
 
+# Per-call usage for the question being answered in this thread. Set by track_usage().
+_usage_calls: ContextVar[list[Usage] | None] = ContextVar("askdb_usage_calls", default=None)
+
+
+@contextmanager
+def track_usage() -> Iterator[list[Usage]]:
+    """Collect the usage of each successful model call made inside the block."""
+    calls: list[Usage] = []
+    token = _usage_calls.set(calls)
+    try:
+        yield calls
+    finally:
+        _usage_calls.reset(token)
+
+
+def total_usage(calls: Sequence[Usage]) -> Usage:
+    return sum(calls, Usage())
+
 
 class LLMError(Exception):
     """The model could not be reached or did not return a usable result."""
@@ -100,7 +121,7 @@ class LLM:
         last_error: Exception | None = None
         for _ in range(_ATTEMPTS):
             try:
-                return client.messages.create(**kwargs)
+                response = client.messages.create(**kwargs)
             except anthropic.APIError as exc:
                 log.warning("Claude API call failed: %s: %s", type(exc).__name__, exc)
                 last_error = exc
@@ -114,6 +135,11 @@ class LLM:
                         f"The AI model {kwargs.get('model')} is not available. "
                         "Check the model names in config/settings.yaml."
                     ) from exc
+            else:
+                calls = _usage_calls.get()
+                if calls is not None:
+                    calls.append(Usage(response.usage.input_tokens, response.usage.output_tokens))
+                return response
         raise LLMError("The AI service did not respond. Please try again.") from last_error
 
     def plan_sql(self, system: str, question: str, history: Sequence[HistoryTurn] = ()) -> SqlPlan:

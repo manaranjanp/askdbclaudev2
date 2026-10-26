@@ -46,6 +46,7 @@ def to_json(outcome: Outcome) -> dict[str, Any]:
         "truncated": outcome.truncated,
         "notice": outcome.notice,
         "csv": _csv_text(outcome.columns, outcome.rows) if outcome.status == "answer" else None,
+        "usage": {"input_tokens": outcome.usage.input_tokens, "output_tokens": outcome.usage.output_tokens},
     }
 
 

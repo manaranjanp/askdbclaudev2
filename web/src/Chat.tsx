@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Answer, AskResponse } from "./Answer";
+import { Answer, AskResponse, Usage } from "./Answer";
 
 type Turn = { question: string; response: AskResponse | null; error: string | null };
 
@@ -75,6 +75,7 @@ export function Chat({ database, conversationId: initialId, onSaved }: Props) {
           <li key={i} className="turn">
             <p className="question">{turn.question}</p>
             {turn.response && <Answer response={turn.response} question={turn.question} />}
+            {turn.response?.usage && <TokenUsage usage={turn.response.usage} />}
             {turn.error && <p role="alert">{turn.error}</p>}
             {!turn.response && !turn.error && <p className="spinner">Working on it…</p>}
           </li>
@@ -93,5 +94,13 @@ export function Chat({ database, conversationId: initialId, onSaved }: Props) {
         </button>
       </form>
     </section>
+  );
+}
+
+function TokenUsage({ usage }: { usage: Usage }) {
+  return (
+    <p className="note">
+      Tokens: {usage.input_tokens.toLocaleString()} input, {usage.output_tokens.toLocaleString()} output
+    </p>
   );
 }

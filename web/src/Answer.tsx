@@ -2,6 +2,9 @@ import { downloadCsv } from "./CsvExport";
 import { ResultTable } from "./ResultTable";
 import { ShowQuery } from "./ShowQuery";
 
+// Tokens the model used for this question. Absent on answers saved before usage was recorded.
+export type Usage = { input_tokens: number; output_tokens: number };
+
 export type AskResponse = {
   status: "answer" | "clarify" | "declined" | "no_data" | "empty" | "blocked" | "timeout" | "error";
   message: string | null;
@@ -14,6 +17,7 @@ export type AskResponse = {
   truncated: boolean;
   csv: string | null;
   notice: string | null;
+  usage?: Usage;
 };
 
 type Props = { response: AskResponse; question: string };
