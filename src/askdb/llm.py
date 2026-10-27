@@ -61,6 +61,11 @@ JUDGE_TOOL: dict[str, Any] = {
     },
 }
 
+# Forced tool use (tool_choice type "tool" or "any") is rejected by the models this app uses,
+# so the tool is offered and the instruction asks for it. A plain-text reply is then reported
+# as a clear error by the callers below, not sent to the user.
+TOOL_INSTRUCTION = "\n\nAlways answer by calling the tool provided. Do not answer in plain text."
+
 # One retry on an API error (SPEC §18).
 _ATTEMPTS = 2
 log = logging.getLogger("askdb.llm")
@@ -146,10 +151,9 @@ class LLM:
         response = self._call(
             model=self.settings.sql_model,
             max_tokens=2000,
-            system=system,
+            system=system + TOOL_INSTRUCTION,
             messages=history_messages(history, question),
             tools=[SQL_TOOL],
-            tool_choice={"type": "tool", "name": SQL_TOOL["name"]},
         )
         for block in response.content:
             if block.type == "tool_use":
@@ -168,10 +172,9 @@ class LLM:
         response = self._call(
             model=self.settings.explain_model,
             max_tokens=300,
-            system=system,
+            system=system + TOOL_INSTRUCTION,
             messages=[{"role": "user", "content": message}],
             tools=[JUDGE_TOOL],
-            tool_choice={"type": "tool", "name": JUDGE_TOOL["name"]},
         )
         for block in response.content:
             if block.type == "tool_use":
