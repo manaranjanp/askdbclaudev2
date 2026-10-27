@@ -164,3 +164,34 @@ def test_calls_outside_track_usage_still_work():
 def test_total_usage_adds_every_call():
     assert total_usage([Usage(100, 20), Usage(300, 50)]) == Usage(400, 70)
     assert total_usage([]) == Usage()
+
+
+class RecordingMessages:
+    """Keeps the keyword arguments of each request, and answers with a valid tool call."""
+
+    def __init__(self) -> None:
+        self.requests: list[dict] = []
+
+    def create(self, **kwargs):
+        self.requests.append(kwargs)
+        if "judge_explanation" in str(kwargs.get("tools")):
+            return tool_response(verdict="pass", reason="ok")
+        return tool_response(sql="SELECT 1", assumptions=[])
+
+
+def test_no_request_forces_a_tool_choice_the_models_reject():
+    # The models reject tool_choice types "tool" and "any" (400 invalid_request_error).
+    messages = RecordingMessages()
+    llm = llm_with(messages)
+    llm.plan_sql("system", "question")
+    llm.judge("system", "message")
+    assert len(messages.requests) == 2
+    for request in messages.requests:
+        assert request.get("tool_choice") is None
+        assert request["system"].endswith("Always answer by calling the tool provided. Do not answer in plain text.")
+
+
+def test_plain_text_instead_of_a_tool_call_is_a_clear_error():
+    llm = llm_with(ScriptedMessages(failures=0, response=text_response("Here is a query.")))
+    with pytest.raises(LLMError, match="no query plan"):
+        llm.plan_sql("system", "question")
